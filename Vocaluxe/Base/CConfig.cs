@@ -79,16 +79,16 @@ namespace Vocaluxe.Base
         [DefaultValue(ERenderer.TR_CONFIG_OPENGL)] public ERenderer Renderer;
 #endif
 
-            [DefaultValue(ETextureQuality.TR_CONFIG_TEXTURE_MEDIUM)]
+            [DefaultValue(ETextureQuality.TR_CONFIG_TEXTURE_HIGHEST)]
             public ETextureQuality TextureQuality;
             [XmlRanged(32, 1024), DefaultValue(256)]
             public int CoverSize;
 
             [XmlRanged(1, 6), DefaultValue(1)]
             public int NumScreens;
-            [DefaultValue(1024)]
+            [DefaultValue(1920)]
             public int ScreenW;
-            [DefaultValue(576)]
+            [DefaultValue(1080)]
             public int ScreenH;
             [DefaultValue(EGeneralAlignment.Middle)]
             public EGeneralAlignment ScreenAlignment;
@@ -108,7 +108,7 @@ namespace Vocaluxe.Base
             public EOffOn VSync;
             [DefaultValue(EOffOn.TR_CONFIG_ON)]
             public EOffOn FullScreen;
-            [DefaultValue(EOffOn.TR_CONFIG_OFF)]
+            [DefaultValue(EOffOn.TR_CONFIG_ON)]
             public EOffOn Stretch;
             [DefaultValue(0.4f), XmlRanged(0, 3)]
             public float FadeTime;
@@ -440,7 +440,7 @@ namespace Vocaluxe.Base
                 case "TextureQuality":
                     return "TextureQuality: " + CHelper.ListStrings(Enum.GetNames(typeof(ETextureQuality)));
                 case "CoverSize":
-                    return "CoverSize (pixels): 32, 64, 128, 256, 512, 1024 (default: 128)";
+                    return "CoverSize (pixels): 32, 64, 128, 256, 512, 1024 (default: 512)";
                 case "NumScreens":
                     return "Number of screens to use. 1 - 6 (default: 1)";
                 case "ScreenW":
