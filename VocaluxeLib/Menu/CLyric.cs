@@ -118,8 +118,7 @@ namespace VocaluxeLib.Menu
         private void _SetText(CSongNote note)
         {
             _Text.Text = note.Text;
-            _Text.Font.Style = (note.Type == ENoteType.Freestyle) ? EStyle.Italic : EStyle.Italic;
-            _Text.Font.Style = (note.Type == ENoteType.Rap) ? EStyle.BoldItalic : EStyle.Bold;
+            _Text.Font.Style = (note.Type == ENoteType.Freestyle) ? EStyle.BoldItalic : EStyle.Bold;
         }
 
         public void Clear()
