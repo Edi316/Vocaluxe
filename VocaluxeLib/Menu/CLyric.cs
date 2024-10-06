@@ -130,6 +130,10 @@ namespace VocaluxeLib.Menu
            {
            _Text.Font.Style = EStyle.BoldItalic;
            }
+           else
+           {
+           _Text.Font.Style = EStyle.Bold;
+           }
         }
 
         public void Clear()
