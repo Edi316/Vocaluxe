@@ -81,7 +81,7 @@ namespace Vocaluxe.Base
 
             [DefaultValue(ETextureQuality.TR_CONFIG_TEXTURE_HIGHEST)]
             public ETextureQuality TextureQuality;
-            [XmlRanged(32, 1024), DefaultValue(256)]
+            [XmlRanged(32, 1024), DefaultValue(512)]
             public int CoverSize;
 
             [XmlRanged(1, 6), DefaultValue(1)]
@@ -108,7 +108,7 @@ namespace Vocaluxe.Base
             public EOffOn VSync;
             [DefaultValue(EOffOn.TR_CONFIG_ON)]
             public EOffOn FullScreen;
-            [DefaultValue(EOffOn.TR_CONFIG_ON)]
+            [DefaultValue(EOffOn.TR_CONFIG_OFF)]
             public EOffOn Stretch;
             [DefaultValue(0.4f), XmlRanged(0, 3)]
             public float FadeTime;
