@@ -1559,18 +1559,18 @@ namespace Vocaluxe.Screens
 
             if (CScreenSong.GetAudioMode() == EAudioMode.TR_AUDIOMODE_INSTRUMENTAL || CScreenSong.GetAudioMode() == EAudioMode.TR_AUDIOMODE_KARAOKE)
             {
-                _CurrentStream = CSound.Load(song.GetInstrumentalPath(), false, true, EAudioEffect.None);
+                _CurrentStream = CSound.Load(song.GetInstrumentalSource(), false, true, EAudioEffect.None);
             }
             else if (CScreenSong.GetAudioMode() == EAudioMode.TR_AUDIOMODE_VOCALS)
             {
-                _CurrentStream = CSound.Load(song.GetInstrumentalPath(), false, true, EAudioEffect.None);
-                _CurrentStreamVocals = CSound.Load(song.GetVocalsPath(), false, true, EAudioEffect.None);
+                _CurrentStream = CSound.Load(song.GetInstrumentalSource(), false, true, EAudioEffect.None);
+                _CurrentStreamVocals = CSound.Load(song.GetVocalsSource(), false, true, EAudioEffect.None);
                 CSound.SetStreamVolume(_CurrentStreamVocals, CConfig.VocalsVolume);
                 CSound.SetPosition(_CurrentStreamVocals, song.Start);
             }
             else
             {
-                _CurrentStream = CSound.Load(song.GetAudioPath(), false, true, CConfig.Config.Sound.KaraokeEffect == EOffOn.TR_CONFIG_ON ? EAudioEffect.Karaoke : EAudioEffect.None);
+                _CurrentStream = CSound.Load(song.GetAudioSource(), false, true, CConfig.Config.Sound.KaraokeEffect == EOffOn.TR_CONFIG_ON ? EAudioEffect.Karaoke : EAudioEffect.None);
             }
 
             CSound.SetStreamVolume(_CurrentStream, 100);
