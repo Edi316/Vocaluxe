@@ -188,7 +188,7 @@ namespace Vocaluxe.Base
             [DefaultValue(ESongMenu.TR_CONFIG_LIST)]
             public ESongMenu SongMenu;
             // ReSharper restore MemberHidesStaticFromOuterClass
-            [DefaultValue(ESongSorting.TR_CONFIG_ARTIST)]
+            [DefaultValue(ESongSorting.TR_CONFIG_ARTIST_LETTER)]
             public ESongSorting SongSorting;
             [DefaultValue(EOffOn.TR_CONFIG_ON)]
             public EOffOn IgnoreArticles;
