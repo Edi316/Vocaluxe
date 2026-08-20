@@ -19,8 +19,10 @@ using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Drawing;
+using System.IO;
 using Vocaluxe.Base.Fonts;
 using Vocaluxe.Base.ThemeSystem;
+using Vocaluxe.Lib.Sound;
 using VocaluxeLib;
 using VocaluxeLib.Draw;
 using VocaluxeLib.Game;
@@ -28,6 +30,8 @@ using VocaluxeLib.Log;
 using VocaluxeLib.Menu;
 using VocaluxeLib.Profile;
 using VocaluxeLib.Songs;
+using VocaluxeLib.Songs.Sources;
+using VocaluxeLib.Utils.Player;
 
 namespace Vocaluxe.Base
 {
@@ -832,9 +836,9 @@ namespace Vocaluxe.Base
 
     class CBvideo : IVideo
     {
-        public CVideoStream Load(string videoUri)
+        public CVideoStream LoadStream(Stream stream)
         {
-            return CVideo.Load(videoUri);
+            return CVideo.LoadStream(stream);
         }
 
         public bool Skip(CVideoStream stream, float startPosition, float videoGap)
@@ -896,9 +900,9 @@ namespace Vocaluxe.Base
 
     class CBsound : ISound
     {
-        public int Load(string uri, bool loop = false, bool prescan = false)
+        public int Load(ISoundSource source, bool loop = false, bool prescan = false)
         {
-            return CSound.Load(uri, loop, prescan);
+            return CSound.Load(source, loop, prescan);
         }
 
         public void SetPosition(int soundStream, float newPosition)
