@@ -1,0 +1,820 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Screen>
+  <Informations>
+    <ScreenName>ScreenNames</ScreenName>
+    <ScreenVersion>3</ScreenVersion>
+  </Informations>
+  <Backgrounds>
+    <Background Name="Background1">
+      <Type>Video</Type>
+      <SlideShowTextures />
+      <Video>BG_Video</Video>
+      <Skin>BG_Options</Skin>
+      <Color Name="BackgroundColor" />
+    </Background>
+  </Backgrounds>
+  <Statics>
+    <Static Name="Static1">
+      <Skin />
+      <Color Name="BackgroundColorAlpha" />
+      <Rect>
+        <X>0</X>
+        <Y>60</Y>
+        <W>1920</W>
+        <H>67.5</H>
+        <Z>0</Z>
+      </Rect>
+    </Static>
+    <Static Name="StaticPlayerAvatar1">
+      <Skin />
+      <Color Name="Visible" />
+      <Rect>
+        <X>1432.5</X>
+        <Y>252</Y>
+        <W>78</W>
+        <H>78</H>
+        <Z>-4</Z>
+      </Rect>
+    </Static>
+    <Static Name="StaticPlayerAvatar2">
+      <Skin />
+      <Color Name="Visible" />
+      <Rect>
+        <X>1432.5</X>
+        <Y>352.5</Y>
+        <W>78</W>
+        <H>78</H>
+        <Z>-4</Z>
+      </Rect>
+    </Static>
+    <Static Name="StaticPlayerAvatar3">
+      <Skin />
+      <Color Name="Visible" />
+      <Rect>
+        <X>1432.5</X>
+        <Y>453</Y>
+        <W>78</W>
+        <H>78</H>
+        <Z>-4</Z>
+      </Rect>
+    </Static>
+    <Static Name="StaticPlayerAvatar4">
+      <Skin />
+      <Color Name="Visible" />
+      <Rect>
+        <X>1432.5</X>
+        <Y>553.5</Y>
+        <W>78</W>
+        <H>78</H>
+        <Z>-4</Z>
+      </Rect>
+    </Static>
+    <Static Name="StaticPlayerAvatar5">
+      <Skin />
+      <Color Name="Visible" />
+      <Rect>
+        <X>1432.5</X>
+        <Y>654</Y>
+        <W>78</W>
+        <H>78</H>
+        <Z>-4</Z>
+      </Rect>
+    </Static>
+    <Static Name="StaticPlayerAvatar6">
+      <Skin />
+      <Color Name="Visible" />
+      <Rect>
+        <X>1432.5</X>
+        <Y>754.5</Y>
+        <W>78</W>
+        <H>78</H>
+        <Z>-4</Z>
+      </Rect>
+    </Static>
+    <Static Name="StaticPlayer1">
+      <Skin>PlayerSelBG</Skin>
+      <Color Name="Player1" />
+      <Rect>
+        <X>1425</X>
+        <Y>244.5</Y>
+        <W>412.5</W>
+        <H>93</H>
+        <Z>-2</Z>
+      </Rect>
+    </Static>
+    <Static Name="StaticPlayer2">
+      <Skin>PlayerSelBG</Skin>
+      <Color Name="Player2" />
+      <Rect>
+        <X>1425</X>
+        <Y>345</Y>
+        <W>412.5</W>
+        <H>93</H>
+        <Z>-2</Z>
+      </Rect>
+    </Static>
+    <Static Name="StaticPlayer3">
+      <Skin>PlayerSelBG</Skin>
+      <Color Name="Player3" />
+      <Rect>
+        <X>1425</X>
+        <Y>445.5</Y>
+        <W>412.5</W>
+        <H>93</H>
+        <Z>-2</Z>
+      </Rect>
+    </Static>
+    <Static Name="StaticPlayer4">
+      <Skin>PlayerSelBG</Skin>
+      <Color Name="Player4" />
+      <Rect>
+        <X>1425</X>
+        <Y>546</Y>
+        <W>412.5</W>
+        <H>93</H>
+        <Z>-2</Z>
+      </Rect>
+    </Static>
+    <Static Name="StaticPlayer5">
+      <Skin>PlayerSelBG</Skin>
+      <Color Name="Player5" />
+      <Rect>
+        <X>1425</X>
+        <Y>646.5</Y>
+        <W>412.5</W>
+        <H>93</H>
+        <Z>-2</Z>
+      </Rect>
+    </Static>
+    <Static Name="StaticPlayer6">
+      <Skin>PlayerSelBG</Skin>
+      <Color Name="Player6" />
+      <Rect>
+        <X>1425</X>
+        <Y>747</Y>
+        <W>412.5</W>
+        <H>93</H>
+        <Z>-2</Z>
+      </Rect>
+    </Static>
+    <Static Name="StaticWarningMics">
+      <Skin>Warning</Skin>
+      <Color Name="StaticWarningColor" />
+      <Rect>
+        <X>165</X>
+        <Y>650</Y>
+        <W>1140</W>
+        <H>75</H>
+        <Z>-1</Z>
+      </Rect>
+    </Static>
+    <Static Name="StaticWarningProfiles">
+      <Skin>Warning</Skin>
+      <Color Name="StaticWarningColor" />
+      <Rect>
+        <X>165</X>
+        <Y>775</Y>
+        <W>1140</W>
+        <H>75</H>
+        <Z>-1</Z>
+      </Rect>
+    </Static>
+  </Statics>
+  <Texts>
+    <Text Name="Text1">
+      <X>960</X>
+      <Y>75</Y>
+      <Z>-3</Z>
+      <H>40.5</H>
+      <MaxW>0</MaxW>
+      <Color Name="TextColor" />
+      <SelColor Name="TextSelColor" />
+      <Align>Center</Align>
+      <ResizeAlign>Center</ResizeAlign>
+      <Style>Bold</Style>
+      <Font>Outline</Font>
+      <Text>TR_SCREENNAMES_MENU</Text>
+    </Text>
+    <Text Name="TextWarningMics">
+      <X>727.5</X>
+      <Y>670</Y>
+      <Z>-1.1</Z>
+      <H>37.5</H>
+      <MaxW>960</MaxW>
+      <Color Name="TextWarningColor" />
+      <SelColor Name="TextWarningColor" />
+      <Align>Center</Align>
+      <ResizeAlign>Center</ResizeAlign>
+      <Style>Bold</Style>
+      <Font>Outline</Font>
+      <Text />
+    </Text>
+    <Text Name="TextWarningProfiles">
+      <X>727.5</X>
+      <Y>795</Y>
+      <Z>-1.1</Z>
+      <H>37.5</H>
+      <MaxW>960</MaxW>
+      <Color Name="TextWarningColor" />
+      <SelColor Name="TextWarningColor" />
+      <Align>Center</Align>
+      <ResizeAlign>Center</ResizeAlign>
+      <Style>Bold</Style>
+      <Font>Outline</Font>
+      <Text />
+    </Text>
+    <Text Name="TextPlayer1">
+      <X>1522.5</X>
+      <Y>252</Y>
+      <Z>-4</Z>
+      <H>30</H>
+      <MaxW>307.5</MaxW>
+      <Color Name="TextColor" />
+      <SelColor Name="TextColor" />
+      <Align>Left</Align>
+      <ResizeAlign>Center</ResizeAlign>
+      <Style>Bold</Style>
+      <Font>Outline</Font>
+      <Text />
+    </Text>
+    <Text Name="TextPlayer2">
+      <X>1522.5</X>
+      <Y>352.5</Y>
+      <Z>-4</Z>
+      <H>30</H>
+      <MaxW>307.5</MaxW>
+      <Color Name="TextColor" />
+      <SelColor Name="TextColor" />
+      <Align>Left</Align>
+      <ResizeAlign>Center</ResizeAlign>
+      <Style>Bold</Style>
+      <Font>Outline</Font>
+      <Text />
+    </Text>
+    <Text Name="TextPlayer3">
+      <X>1522.5</X>
+      <Y>453</Y>
+      <Z>-4</Z>
+      <H>30</H>
+      <MaxW>307.5</MaxW>
+      <Color Name="TextColor" />
+      <SelColor Name="TextColor" />
+      <Align>Left</Align>
+      <ResizeAlign>Center</ResizeAlign>
+      <Style>Bold</Style>
+      <Font>Outline</Font>
+      <Text />
+    </Text>
+    <Text Name="TextPlayer4">
+      <X>1522.5</X>
+      <Y>553.5</Y>
+      <Z>-4</Z>
+      <H>30</H>
+      <MaxW>307.5</MaxW>
+      <Color Name="TextColor" />
+      <SelColor Name="TextColor" />
+      <Align>Left</Align>
+      <ResizeAlign>Center</ResizeAlign>
+      <Style>Bold</Style>
+      <Font>Outline</Font>
+      <Text />
+    </Text>
+    <Text Name="TextPlayer5">
+      <X>1522.5</X>
+      <Y>654</Y>
+      <Z>-4</Z>
+      <H>30</H>
+      <MaxW>307.5</MaxW>
+      <Color Name="TextColor" />
+      <SelColor Name="TextColor" />
+      <Align>Left</Align>
+      <ResizeAlign>Center</ResizeAlign>
+      <Style>Bold</Style>
+      <Font>Outline</Font>
+      <Text />
+    </Text>
+    <Text Name="TextPlayer6">
+      <X>1522.5</X>
+      <Y>754.5</Y>
+      <Z>-4</Z>
+      <H>30</H>
+      <MaxW>307.5</MaxW>
+      <Color Name="TextColor" />
+      <SelColor Name="TextColor" />
+      <Align>Left</Align>
+      <ResizeAlign>Center</ResizeAlign>
+      <Style>Bold</Style>
+      <Font>Outline</Font>
+      <Text />
+    </Text>
+  </Texts>
+  <Buttons>
+    <Button Name="ButtonBack">
+      <Skin>Button</Skin>
+      <SkinSelected>Button</SkinSelected>
+      <Rect>
+        <X>82.5</X>
+        <Y>904.5</Y>
+        <W>225</W>
+        <H>75</H>
+        <Z>0</Z>
+      </Rect>
+      <Color Name="ButtonColor" />
+      <SelColor Name="ButtonSelColor" />
+      <Text Name="Text">
+        <X>112.5</X>
+        <Y>18</Y>
+        <Z>0</Z>
+        <H>40.5</H>
+        <MaxW>213</MaxW>
+        <Color Name="ButtonTextColor" />
+        <SelColor Name="ButtonTextSelColor" />
+        <Align>Center</Align>
+        <ResizeAlign>Center</ResizeAlign>
+        <Style>Bold</Style>
+        <Font>Outline</Font>
+        <Text>TR_BUTTON_BACK</Text>
+      </Text>
+    </Button>
+    <Button Name="ButtonStart">
+      <Skin>Button</Skin>
+      <SkinSelected>Button</SkinSelected>
+      <Rect>
+        <X>1612.5</X>
+        <Y>904.5</Y>
+        <W>225</W>
+        <H>75</H>
+        <Z>0</Z>
+      </Rect>
+      <Color Name="ButtonColor" />
+      <SelColor Name="ButtonSelColor" />
+      <Text Name="Text">
+        <X>112.5</X>
+        <Y>18</Y>
+        <Z>0</Z>
+        <H>40.5</H>
+        <MaxW>213</MaxW>
+        <Color Name="ButtonTextColor" />
+        <SelColor Name="ButtonTextSelColor" />
+        <Align>Center</Align>
+        <ResizeAlign>Center</ResizeAlign>
+        <Style>Bold</Style>
+        <Font>Outline</Font>
+        <Text>TR_BUTTON_START</Text>
+      </Text>
+    </Button>
+  </Buttons>
+  <SongMenus />
+  <Lyrics />
+  <SelectSlides>
+    <SelectSlide Name="SelectSlidePlayerNumber">
+      <Skin>SelectSlidePlayer</Skin>
+      <SkinArrowLeft>SelectSlideArrowLeft</SkinArrowLeft>
+      <SkinArrowRight>SelectSlideArrowRight</SkinArrowRight>
+      <SkinSelected>SelectSlidePlayer</SkinSelected>
+      <SkinArrowLeftSelected>SelectSlideArrowLeft</SkinArrowLeftSelected>
+      <SkinArrowRightSelected>SelectSlideArrowRight</SkinArrowRightSelected>
+      <Rect>
+        <X>1425</X>
+        <Y>195</Y>
+        <W>412.5</W>
+        <H>42</H>
+        <Z>0</Z>
+      </Rect>
+      <RectArrowLeft>
+        <X>1432.5</X>
+        <Y>201</Y>
+        <W>30</W>
+        <H>30</H>
+        <Z>0</Z>
+      </RectArrowLeft>
+      <RectArrowRight>
+        <X>1800</X>
+        <Y>201</Y>
+        <W>30</W>
+        <H>30</H>
+        <Z>0</Z>
+      </RectArrowRight>
+      <Color Name="SelectSlideColor" />
+      <SelColor Name="SelectSlideSelColor" />
+      <ArrowColor Name="ArrowColor" />
+      <ArrowSelColor Name="ArrowSelColor" />
+      <TextColor Name="TextColor" />
+      <TextSelColor Name="TextColor" />
+      <TextH>30</TextH>
+      <TextRelativeX>45</TextRelativeX>
+      <TextRelativeY>0</TextRelativeY>
+      <TextMaxW>279</TextMaxW>
+      <TextFont>Outline</TextFont>
+      <TextStyle>Bold</TextStyle>
+      <NumVisible>1</NumVisible>
+    </SelectSlide>
+    <SelectSlide Name="SelectSlideDuetPlayer1">
+      <Skin />
+      <SkinArrowLeft>SelectSlideArrowLeft</SkinArrowLeft>
+      <SkinArrowRight>SelectSlideArrowRight</SkinArrowRight>
+      <SkinSelected>Button</SkinSelected>
+      <SkinArrowLeftSelected>SelectSlideArrowLeft</SkinArrowLeftSelected>
+      <SkinArrowRightSelected>SelectSlideArrowRight</SkinArrowRightSelected>
+      <Rect>
+        <X>1560</X>
+        <Y>282</Y>
+        <W>232.5</W>
+        <H>30</H>
+        <Z>-4</Z>
+      </Rect>
+      <RectArrowLeft>
+        <X>1522.5</X>
+        <Y>282</Y>
+        <W>30</W>
+        <H>30</H>
+        <Z>-4</Z>
+      </RectArrowLeft>
+      <RectArrowRight>
+        <X>1800</X>
+        <Y>282</Y>
+        <W>30</W>
+        <H>30</H>
+        <Z>-4</Z>
+      </RectArrowRight>
+      <Color Name="SelectSlideColor" />
+      <SelColor Name="SelectSlideSelColor" />
+      <ArrowColor Name="ArrowColor" />
+      <ArrowSelColor Name="ArrowSelColor" />
+      <TextColor Name="TextColor" />
+      <TextSelColor Name="TextSelColor" />
+      <TextH>30</TextH>
+      <TextRelativeX>45</TextRelativeX>
+      <TextRelativeY>0</TextRelativeY>
+      <TextMaxW>217.5</TextMaxW>
+      <TextFont>Outline</TextFont>
+      <TextStyle>Bold</TextStyle>
+      <NumVisible>1</NumVisible>
+    </SelectSlide>
+    <SelectSlide Name="SelectSlideDuetPlayer2">
+      <Skin />
+      <SkinArrowLeft>SelectSlideArrowLeft</SkinArrowLeft>
+      <SkinArrowRight>SelectSlideArrowRight</SkinArrowRight>
+      <SkinSelected>Button</SkinSelected>
+      <SkinArrowLeftSelected>SelectSlideArrowLeft</SkinArrowLeftSelected>
+      <SkinArrowRightSelected>SelectSlideArrowRight</SkinArrowRightSelected>
+      <Rect>
+        <X>1560</X>
+        <Y>382.5</Y>
+        <W>232.5</W>
+        <H>30</H>
+        <Z>-4</Z>
+      </Rect>
+      <RectArrowLeft>
+        <X>1522.5</X>
+        <Y>382.5</Y>
+        <W>30</W>
+        <H>30</H>
+        <Z>-4</Z>
+      </RectArrowLeft>
+      <RectArrowRight>
+        <X>1800</X>
+        <Y>382.5</Y>
+        <W>30</W>
+        <H>30</H>
+        <Z>-4</Z>
+      </RectArrowRight>
+      <Color Name="SelectSlideColor" />
+      <SelColor Name="SelectSlideSelColor" />
+      <ArrowColor Name="ArrowColor" />
+      <ArrowSelColor Name="ArrowSelColor" />
+      <TextColor Name="TextColor" />
+      <TextSelColor Name="TextSelColor" />
+      <TextH>30</TextH>
+      <TextRelativeX>45</TextRelativeX>
+      <TextRelativeY>0</TextRelativeY>
+      <TextMaxW>217.5</TextMaxW>
+      <TextFont>Outline</TextFont>
+      <TextStyle>Bold</TextStyle>
+      <NumVisible>1</NumVisible>
+    </SelectSlide>
+    <SelectSlide Name="SelectSlideDuetPlayer3">
+      <Skin />
+      <SkinArrowLeft>SelectSlideArrowLeft</SkinArrowLeft>
+      <SkinArrowRight>SelectSlideArrowRight</SkinArrowRight>
+      <SkinSelected>Button</SkinSelected>
+      <SkinArrowLeftSelected>SelectSlideArrowLeft</SkinArrowLeftSelected>
+      <SkinArrowRightSelected>SelectSlideArrowRight</SkinArrowRightSelected>
+      <Rect>
+        <X>1560</X>
+        <Y>483</Y>
+        <W>232.5</W>
+        <H>30</H>
+        <Z>-4</Z>
+      </Rect>
+      <RectArrowLeft>
+        <X>1522.5</X>
+        <Y>483</Y>
+        <W>30</W>
+        <H>30</H>
+        <Z>-4</Z>
+      </RectArrowLeft>
+      <RectArrowRight>
+        <X>1800</X>
+        <Y>483</Y>
+        <W>30</W>
+        <H>30</H>
+        <Z>-4</Z>
+      </RectArrowRight>
+      <Color Name="SelectSlideColor" />
+      <SelColor Name="SelectSlideSelColor" />
+      <ArrowColor Name="ArrowColor" />
+      <ArrowSelColor Name="ArrowSelColor" />
+      <TextColor Name="TextColor" />
+      <TextSelColor Name="TextSelColor" />
+      <TextH>30</TextH>
+      <TextRelativeX>45</TextRelativeX>
+      <TextRelativeY>0</TextRelativeY>
+      <TextMaxW>217.5</TextMaxW>
+      <TextFont>Outline</TextFont>
+      <TextStyle>Bold</TextStyle>
+      <NumVisible>1</NumVisible>
+    </SelectSlide>
+    <SelectSlide Name="SelectSlideDuetPlayer4">
+      <Skin />
+      <SkinArrowLeft>SelectSlideArrowLeft</SkinArrowLeft>
+      <SkinArrowRight>SelectSlideArrowRight</SkinArrowRight>
+      <SkinSelected>Button</SkinSelected>
+      <SkinArrowLeftSelected>SelectSlideArrowLeft</SkinArrowLeftSelected>
+      <SkinArrowRightSelected>SelectSlideArrowRight</SkinArrowRightSelected>
+      <Rect>
+        <X>1560</X>
+        <Y>583.5</Y>
+        <W>232.5</W>
+        <H>30</H>
+        <Z>-4</Z>
+      </Rect>
+      <RectArrowLeft>
+        <X>1522.5</X>
+        <Y>583.5</Y>
+        <W>30</W>
+        <H>30</H>
+        <Z>-4</Z>
+      </RectArrowLeft>
+      <RectArrowRight>
+        <X>1800</X>
+        <Y>583.5</Y>
+        <W>30</W>
+        <H>30</H>
+        <Z>-4</Z>
+      </RectArrowRight>
+      <Color Name="SelectSlideColor" />
+      <SelColor Name="SelectSlideSelColor" />
+      <ArrowColor Name="ArrowColor" />
+      <ArrowSelColor Name="ArrowSelColor" />
+      <TextColor Name="TextColor" />
+      <TextSelColor Name="TextSelColor" />
+      <TextH>30</TextH>
+      <TextRelativeX>30</TextRelativeX>
+      <TextRelativeY>0</TextRelativeY>
+      <TextMaxW>145</TextMaxW>
+      <TextFont>Outline</TextFont>
+      <TextStyle>Bold</TextStyle>
+      <NumVisible>1</NumVisible>
+    </SelectSlide>
+    <SelectSlide Name="SelectSlideDuetPlayer5">
+      <Skin />
+      <SkinArrowLeft>SelectSlideArrowLeft</SkinArrowLeft>
+      <SkinArrowRight>SelectSlideArrowRight</SkinArrowRight>
+      <SkinSelected>Button</SkinSelected>
+      <SkinArrowLeftSelected>SelectSlideArrowLeft</SkinArrowLeftSelected>
+      <SkinArrowRightSelected>SelectSlideArrowRight</SkinArrowRightSelected>
+      <Rect>
+        <X>1560</X>
+        <Y>684</Y>
+        <W>232.5</W>
+        <H>30</H>
+        <Z>-4</Z>
+      </Rect>
+      <RectArrowLeft>
+        <X>1522.5</X>
+        <Y>684</Y>
+        <W>30</W>
+        <H>30</H>
+        <Z>-4</Z>
+      </RectArrowLeft>
+      <RectArrowRight>
+        <X>1800</X>
+        <Y>684</Y>
+        <W>30</W>
+        <H>30</H>
+        <Z>-4</Z>
+      </RectArrowRight>
+      <Color Name="SelectSlideColor" />
+      <SelColor Name="SelectSlideSelColor" />
+      <ArrowColor Name="ArrowColor" />
+      <ArrowSelColor Name="ArrowSelColor" />
+      <TextColor Name="TextColor" />
+      <TextSelColor Name="TextSelColor" />
+      <TextH>30</TextH>
+      <TextRelativeX>45</TextRelativeX>
+      <TextRelativeY>0</TextRelativeY>
+      <TextMaxW>217.5</TextMaxW>
+      <TextFont>Outline</TextFont>
+      <TextStyle>Bold</TextStyle>
+      <NumVisible>1</NumVisible>
+    </SelectSlide>
+    <SelectSlide Name="SelectSlideDuetPlayer6">
+      <Skin />
+      <SkinArrowLeft>SelectSlideArrowLeft</SkinArrowLeft>
+      <SkinArrowRight>SelectSlideArrowRight</SkinArrowRight>
+      <SkinSelected>Button</SkinSelected>
+      <SkinArrowLeftSelected>SelectSlideArrowLeft</SkinArrowLeftSelected>
+      <SkinArrowRightSelected>SelectSlideArrowRight</SkinArrowRightSelected>
+      <Rect>
+        <X>1560</X>
+        <Y>784.5</Y>
+        <W>232.5</W>
+        <H>30</H>
+        <Z>-4</Z>
+      </Rect>
+      <RectArrowLeft>
+        <X>1522.5</X>
+        <Y>784.5</Y>
+        <W>30</W>
+        <H>30</H>
+        <Z>-4</Z>
+      </RectArrowLeft>
+      <RectArrowRight>
+        <X>1800</X>
+        <Y>784.5</Y>
+        <W>30</W>
+        <H>30</H>
+        <Z>-4</Z>
+      </RectArrowRight>
+      <Color Name="SelectSlideColor" />
+      <SelColor Name="SelectSlideSelColor" />
+      <ArrowColor Name="ArrowColor" />
+      <ArrowSelColor Name="ArrowSelColor" />
+      <TextColor Name="TextColor" />
+      <TextSelColor Name="TextSelColor" />
+      <TextH>30</TextH>
+      <TextRelativeX>45</TextRelativeX>
+      <TextRelativeY>0</TextRelativeY>
+      <TextMaxW>217.5</TextMaxW>
+      <TextFont>Outline</TextFont>
+      <TextStyle>Bold</TextStyle>
+      <NumVisible>1</NumVisible>
+    </SelectSlide>
+  </SelectSlides>
+  <SingNotes />
+  <NameSelections>
+    <NameSelection Name="NameSelection">
+      <Rect>
+        <X>82.5</X>
+        <Y>195</Y>
+        <W>1230</W>
+        <H>540</H>
+        <Z>0</Z>
+      </Rect>
+      <SkinEmptyTile>CoverTile</SkinEmptyTile>
+      <ColorEmptyTile Name="EmptyTileColor" />
+      <SkinTileSelected>PlayerSelector</SkinTileSelected>
+      <Tiles>
+        <W>150</W>
+        <H>150</H>
+        <NumW>8</NumW>
+        <NumH>4</NumH>
+        <SpaceW>15</SpaceW>
+        <SpaceH>15</SpaceH>
+        <Name>
+          <Space>-30</Space>
+          <H>25.5</H>
+          <Font>Outline</Font>
+          <Style>Bold</Style>
+          <Color Name="TextColor" />
+        </Name>
+      </Tiles>
+    </NameSelection>
+  </NameSelections>
+  <Equalizers>
+    <Equalizer Name="EqualizerPlayer1">
+      <Skin />
+      <Rect>
+        <X>1522.5</X>
+        <Y>282</Y>
+        <W>307.5</W>
+        <H>55.5</H>
+        <Z>-3</Z>
+      </Rect>
+      <NumBars>16</NumBars>
+      <Space>2</Space>
+      <Style>Columns</Style>
+      <DrawNegative>TR_CONFIG_OFF</DrawNegative>
+      <Color Name="Player1">
+        <A>0.2</A>
+      </Color>
+      <MaxColor Name="Player1">
+        <A>0.4</A>
+      </MaxColor>
+    </Equalizer>
+    <Equalizer Name="EqualizerPlayer2">
+      <Skin />
+      <Rect>
+        <X>1522.5</X>
+        <Y>382.5</Y>
+        <W>307.5</W>
+        <H>55.5</H>
+        <Z>-3</Z>
+      </Rect>
+      <NumBars>16</NumBars>
+      <Space>2</Space>
+      <Style>Columns</Style>
+      <DrawNegative>TR_CONFIG_OFF</DrawNegative>
+      <Color Name="Player2">
+        <A>0.2</A>
+      </Color>
+      <MaxColor Name="Player2">
+        <A>0.4</A>
+      </MaxColor>
+    </Equalizer>
+    <Equalizer Name="EqualizerPlayer3">
+      <Skin />
+      <Rect>
+        <X>1522.5</X>
+        <Y>483</Y>
+        <W>307.5</W>
+        <H>55.5</H>
+        <Z>-3</Z>
+      </Rect>
+      <NumBars>16</NumBars>
+      <Space>2</Space>
+      <Style>Columns</Style>
+      <DrawNegative>TR_CONFIG_OFF</DrawNegative>
+      <Color Name="Player3">
+        <A>0.2</A>
+      </Color>
+      <MaxColor Name="Player3">
+        <A>0.4</A>
+      </MaxColor>
+    </Equalizer>
+    <Equalizer Name="EqualizerPlayer4">
+      <Skin />
+      <Rect>
+        <X>1522.5</X>
+        <Y>583.5</Y>
+        <W>307.5</W>
+        <H>55.5</H>
+        <Z>-3</Z>
+      </Rect>
+      <NumBars>16</NumBars>
+      <Space>2</Space>
+      <Style>Columns</Style>
+      <DrawNegative>TR_CONFIG_OFF</DrawNegative>
+      <Color Name="Player4">
+        <A>0.2</A>
+      </Color>
+      <MaxColor Name="Player4">
+        <A>0.4</A>
+      </MaxColor>
+    </Equalizer>
+    <Equalizer Name="EqualizerPlayer5">
+      <Skin />
+      <Rect>
+        <X>1522.5</X>
+        <Y>684</Y>
+        <W>307.5</W>
+        <H>55.5</H>
+        <Z>-3</Z>
+      </Rect>
+      <NumBars>16</NumBars>
+      <Space>2</Space>
+      <Style>Columns</Style>
+      <DrawNegative>TR_CONFIG_OFF</DrawNegative>
+      <Color Name="Player5">
+        <A>0.2</A>
+      </Color>
+      <MaxColor Name="Player5">
+        <A>0.4</A>
+      </MaxColor>
+    </Equalizer>
+    <Equalizer Name="EqualizerPlayer6">
+      <Skin />
+      <Rect>
+        <X>1522.5</X>
+        <Y>784.5</Y>
+        <W>307.5</W>
+        <H>55.5</H>
+        <Z>-3</Z>
+      </Rect>
+      <NumBars>16</NumBars>
+      <Space>2</Space>
+      <Style>Columns</Style>
+      <DrawNegative>TR_CONFIG_OFF</DrawNegative>
+      <Color Name="Player6">
+        <A>0.2</A>
+      </Color>
+      <MaxColor Name="Player6">
+        <A>0.4</A>
+      </MaxColor>
+    </Equalizer>
+  </Equalizers>
+  <Playlists />
+  <ParticleEffects />
+  <ScreenSettings />
+</Screen>
