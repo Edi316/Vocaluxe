@@ -78,7 +78,7 @@ namespace Vocaluxe.Base
             public ERenderer Renderer;
 #endif
 
-            [DefaultValue(ETextureQuality.TR_CONFIG_TEXTURE_HIGH)]
+            [DefaultValue(ETextureQuality.TR_CONFIG_TEXTURE_HIGHEST)]
             public ETextureQuality TextureQuality;
             [XmlRanged(32, 1024), DefaultValue(512)]
             public int CoverSize;
@@ -115,15 +115,15 @@ namespace Vocaluxe.Base
 
         public struct SConfigTheme
         {
-            [XmlElement("Name"), DefaultValue("Vocaluxe 2024")]
+            [XmlElement("Name"), DefaultValue("Tonix")]
             public string Theme;
             [DefaultValue("Standard")]
             public string Skin;
-            [XmlElement("Cover"), DefaultValue("Vocaluxe 2024")]
+            [XmlElement("Cover"), DefaultValue("Tonix")]
             public string CoverTheme;
             [DefaultValue(EOffOn.TR_CONFIG_ON)]
             public EOffOn DrawNoteLines;
-            [DefaultValue(EOffOn.TR_CONFIG_ON)]
+            [DefaultValue(EOffOn.TR_CONFIG_OFF)]
             public EOffOn DrawToneHelper;
             [DefaultValue(ETimerLook.TR_CONFIG_TIMERLOOK_EXPANDED)]
             public ETimerLook TimerLook;
@@ -166,9 +166,9 @@ namespace Vocaluxe.Base
             public EOffOn BackgroundMusicUseStart;
             [XmlRanged(0, 100), DefaultValue(50)]
             public int PreviewMusicVolume;
-            [XmlRanged(0, 100), DefaultValue(80)]
+            [XmlRanged(0, 100), DefaultValue(90)]
             public int GameMusicVolume;
-            [XmlRanged(0, 100), DefaultValue(80)]
+            [XmlRanged(0, 100), DefaultValue(90)]
             public int SoundEffectVolume;
             [XmlRanged(0, 100), DefaultValue(50)]
             public int VocalsVolume;
@@ -185,7 +185,7 @@ namespace Vocaluxe.Base
             public string Language;
             public string[] SongFolder;
             // ReSharper disable MemberHidesStaticFromOuterClass
-            [DefaultValue(ESongMenu.TR_CONFIG_TILE_BOARD)]
+            [DefaultValue(ESongMenu.TR_CONFIG_LIST)]
             public ESongMenu SongMenu;
             // ReSharper restore MemberHidesStaticFromOuterClass
             [DefaultValue(ESongSorting.TR_CONFIG_ARTIST)]
@@ -196,9 +196,9 @@ namespace Vocaluxe.Base
             public ETimerMode TimerMode;
             [XmlAltName("NumPlayer"), DefaultValue(2)]
             public int NumPlayers;
-            [DefaultValue(EOffOn.TR_CONFIG_OFF)]
+            [DefaultValue(EOffOn.TR_CONFIG_ON)]
             public EOffOn Tabs;
-            [DefaultValue(EOffOn.TR_CONFIG_OFF)]
+            [DefaultValue(EOffOn.TR_CONFIG_ON)]
             public EOffOn AutoplayPreviews;
             [XmlAltName("AutoplayPreviewDelay"), DefaultValue(500)]
             public int AutoplayPreviewDelay;
@@ -208,7 +208,7 @@ namespace Vocaluxe.Base
             public float MinLineBreakTime; //Minimum time to show the text before it is (to be) sung (if possible)
             [XmlArrayItem("Player"), XmlArray]
             public string[] Players;
-            [DefaultValue(EHighscoreStyle.TR_CONFIG_HIGHSCORE_LIST_BEST)]
+            [DefaultValue(EHighscoreStyle.TR_CONFIG_HIGHSCORE_LIST_ALL)]
             public EHighscoreStyle HighscoreStyle;
         }
 
@@ -232,7 +232,7 @@ namespace Vocaluxe.Base
         public struct SConfigRecord
         {
             public SMicConfig[] MicConfig;
-            [DefaultValue(200)]
+            [DefaultValue(180)]
             public int MicDelay; //[ms]
         }
 
