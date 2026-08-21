@@ -232,26 +232,28 @@ namespace Vocaluxe.Lib.Database
                         command.CommandText = "SELECT id FROM Cover WHERE [Path] = @path";
                         command.Parameters.Clear();
                         command.Parameters.AddWithValue("@path", coverPath);
+
                         var reader = command.ExecuteReader();
 
-                        if (reader != null)
+                        if (reader == null || !reader.Read())
                         {
-                            reader.Read();
-                            var id = reader.GetInt32(0);
-                            reader.Dispose();
+                            reader?.Dispose();
+                            return false;
                         }
+
+                        var id = reader.GetInt32(0);
+                        reader.Dispose();
 
                         command.CommandText = "INSERT INTO CoverData (CoverId, Data) VALUES (@id, @data)";
                         command.Parameters.Clear();
                         command.Parameters.AddWithValue("@id", id);
                         command.Parameters.AddWithValue("@data", data);
                         command.ExecuteNonQuery();
+
                         return true;
                     }
                 }
             }
-
-            return false;
         }
 
         public void CommitCovers()
