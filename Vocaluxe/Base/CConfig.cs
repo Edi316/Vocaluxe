@@ -181,7 +181,7 @@ namespace Vocaluxe.Base
 
         public struct SConfigGame
         {
-            [DefaultValue(CSettings.FallbackLanguage)]
+            [DefaultValue("Deutsch")]
             public string Language;
             public string[] SongFolder;
             // ReSharper disable MemberHidesStaticFromOuterClass
