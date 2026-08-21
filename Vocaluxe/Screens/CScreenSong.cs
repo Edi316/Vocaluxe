@@ -910,18 +910,16 @@ namespace Vocaluxe.Screens
 
                 if (_CurrentSelectedCategoryIndex >= 0 && _CurrentSelectedCategoryIndex < CSongs.Categories.Count)
                 {
-                    _SongMenu.SetSelectedCategory(lastCategoryIndex);
                     _SongMenu.SetSelectedCategory(_CurrentSelectedCategoryIndex);
                     _SongMenu.EnterSelectedCategory();
                 }
             }
 
-            var lastSongId = getSelectedSongId();
             if (CSongs.IsInCategory && CurrentSelectedSongId >= 0)
             {
                 for (var i = 0; i < CSongs.VisibleSongs.Count; i++)
                 {
-                    if (CSongs.VisibleSongs[i].Id == lastSongId)
+                    if (CSongs.VisibleSongs[i].Id == CurrentSelectedSongId)
                     {
                         _SongMenu.SetSelectedSong(i);
                         break;
@@ -1745,12 +1743,12 @@ namespace Vocaluxe.Screens
             _SelectSlides[_SelectSlideOptionsAudioMode].Clear();
             var currentSong = CSongs.VisibleSongs[_SongMenu.GetPreviewSongNr()];
 
-            if (currentSong.HasInstrumental)
+            if (currentSong.HasInstrumental())
             {
                 _SelectSlides[_SelectSlideOptionsAudioMode].AddValue("TR_AUDIOMODE_NORMAL", tag: (int)EAudioMode.TR_AUDIOMODE_NORMAL);
                 _SelectSlides[_SelectSlideOptionsAudioMode].AddValue("TR_AUDIOMODE_INSTRUMENTAL", tag: (int)EAudioMode.TR_AUDIOMODE_INSTRUMENTAL);
 
-                if (currentSong.HasVocals)
+                if (currentSong.HasVocals())
                 {
                     _SelectSlides[_SelectSlideOptionsAudioMode].AddValue("TR_AUDIOMODE_VOCALS", tag: (int)EAudioMode.TR_AUDIOMODE_VOCALS);
                 }
