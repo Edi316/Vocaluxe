@@ -206,8 +206,8 @@ namespace Vocaluxe.Lib.Database
                     command.Transaction = _TransactionCover;
                     command.CommandText = "INSERT INTO Cover (Path, width, height) VALUES (@path, @w, @h)";
                     command.Parameters.Clear();
-                    command.Parameters.AddWithValue("@w", size.Width);
-                    command.Parameters.AddWithValue("@h", size.Height);
+                    command.Parameters.AddWithValue("@w", width);
+                    command.Parameters.AddWithValue("@h", height);
                     command.Parameters.AddWithValue("@path", coverPath);
                     command.ExecuteNonQuery();
 
