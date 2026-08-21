@@ -121,7 +121,22 @@ namespace Vocaluxe.Lib.Database
                             reader.Read();
                             var data2 = _GetBytes(reader);
                             reader.Dispose();
-                            tex = CDraw.EnqueueTexture(w, h, data2);
+
+                            try
+                            {
+                                using (var stream = new MemoryStream(data2))
+                                using (var source = new System.Drawing.Bitmap(stream))
+                                {
+                                    var bitmap = new System.Drawing.Bitmap(source);
+                                    tex = CDraw.EnqueueTexture(bitmap);
+                                }
+                            }
+                            catch (Exception e)
+                            {
+                                CLog.Error("Can't decode cover from database: " + e);
+                                return false;
+                            }
+
                             return true;
                         }
 
@@ -141,36 +156,36 @@ namespace Vocaluxe.Lib.Database
             // At this point we do not have a mathing entry in the CoverDB (either no Data found and deleted or nothing at all)
             // We break out of the lock to do the bitmap loading and resizing here to allow multithreaded loading
 
-            var origin = CHelper.LoadBitmap(coverPath);
-            if (origin == null)
-            {
-                return false;
-            }
-
-            var size = origin.GetSize();
-            if (size.Width > maxSize || size.Height > maxSize)
-            {
-                size = CHelper.FitInBounds(new SRectF(0, 0, maxSize, maxSize, 0), (float)size.Width / size.Height, EAspect.LetterBox).SizeI;
-                var tmp = origin.Resize(size);
-                origin.Dispose();
-                origin = tmp;
-            }
-
             byte[] data;
+            int width;
+            int height;
 
             try
             {
-                data = new byte[size.Width * size.Height * 4];
-                var bmpData = origin.LockBits(origin.GetRect(), ImageLockMode.ReadOnly, PixelFormat.Format32bppArgb);
-                Marshal.Copy(bmpData.Scan0, data, 0, data.Length);
-                origin.UnlockBits(bmpData);
-            }
-            finally
-            {
-                origin.Dispose();
-            }
+                data = File.ReadAllBytes(coverPath);
 
-            tex = CDraw.EnqueueTexture(size.Width, size.Height, data);
+                using (var source = CHelper.LoadBitmap(coverPath))
+                {
+                    if (source == null)
+                        return false;
+
+                    var sourceSize = source.GetSize();
+                    width = sourceSize.Width;
+                    height = sourceSize.Height;
+                }
+
+                using (var stream = new MemoryStream(data))
+                using (var source = new System.Drawing.Bitmap(stream))
+                {
+                    var bitmap = new System.Drawing.Bitmap(source);
+                    tex = CDraw.EnqueueTexture(bitmap);
+                }
+            }
+            catch (Exception e)
+            {
+                CLog.Error("Error loading cover: " + coverPath + " - " + e);
+                return false;
+            }
 
             lock (_Mutex)
             {
