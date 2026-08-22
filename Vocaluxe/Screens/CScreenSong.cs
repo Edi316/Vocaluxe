@@ -25,6 +25,7 @@ using VocaluxeLib;
 using VocaluxeLib.Menu;
 using VocaluxeLib.Menu.SongMenu;
 using VocaluxeLib.PartyModes;
+using VocaluxeLib.Songs;
 
 namespace Vocaluxe.Screens
 {
@@ -1055,7 +1056,7 @@ namespace Vocaluxe.Screens
             }
         }
     
-        private static string _GetGeneratedCoverText(CSong song, ECoverGeneratorType coverType)
+        private static string _GetGeneratedCoverText(VocaluxeLib.Songs.CSong song, ECoverGeneratorType coverType)
         {
             switch (coverType)
             {
