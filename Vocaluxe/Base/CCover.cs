@@ -124,6 +124,18 @@ namespace Vocaluxe.Base
             }
 
             texture = CDraw.CopyTexture(NoCover);
+
+            lock (_Covers)
+            {
+                if (!_CoverExists(text))
+                    _Covers.Add(text, texture);
+                else
+                    texture = _Covers[text];
+            }
+
+            if (texture == null)
+                return NoCover;
+
             Task.Factory.StartNew(() =>
             {
                 _CancelToken.Token.ThrowIfCancellationRequested();
@@ -131,9 +143,7 @@ namespace Vocaluxe.Base
                 var coverBmp = !_CoverGenerators.ContainsKey(type) ? null : _CoverGenerators[type].GetCover(text, firstCoverPath);
                 _CancelToken.Token.ThrowIfCancellationRequested();
                 if (coverBmp == null && _CoverGenerators.ContainsKey(ECoverGeneratorType.Default))
-                {
                     coverBmp = _CoverGenerators[ECoverGeneratorType.Default].GetCover(text, firstCoverPath);
-                }
 
                 _CancelToken.Token.ThrowIfCancellationRequested();
                 if (coverBmp != null)
@@ -144,8 +154,9 @@ namespace Vocaluxe.Base
 
                 _CancelToken.Token.ThrowIfCancellationRequested();
             }, _CancelToken.Token);
-            
+
             return texture;
+
         }
 
         /// <summary>
