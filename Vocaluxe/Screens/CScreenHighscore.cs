@@ -52,7 +52,7 @@ namespace Vocaluxe.Screens
 
         public override EMusicType CurrentMusicType
         {
-            get { return EMusicType.BackgroundPreview; }
+            get { return EMusicType.Background; }
         }
 
         private int _HighscoreStream = -1;
