@@ -1,9 +1,9 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <root>
-  <ID>600352d6-d975-4945-9758-e6b379972a12</ID>
-  <PlayerName>Beginner</PlayerName>
-  <Difficulty>TR_CONFIG_EASY</Difficulty>
-  <UserRole>TR_USERROLE_GUEST</UserRole>
+  <Id>ee8382a7-0c14-417b-b815-ebe7ef7a054c</Id>
+  <PlayerName>Spieler 1</PlayerName>
+  <Difficulty>TR_CONFIG_NORMAL</Difficulty>
+  <UserRole>TR_USERROLE_NORMAL</UserRole>
   <Active>TR_CONFIG_ON</Active>
   <Avatar>Guest01.png</Avatar>
 </root>
