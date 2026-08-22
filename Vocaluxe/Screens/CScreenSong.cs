@@ -947,6 +947,7 @@ namespace Vocaluxe.Screens
 
             _Statics[_StaticShortInfoTop].Visible = false;
             _Texts[_TextShortInfoTop].Visible = false;
+            _PreloadVisibleCovers();
 
             UpdateGame();
         }
@@ -1021,6 +1022,66 @@ namespace Vocaluxe.Screens
             _UpdatePartyModeOptions();
 
             return true;
+        }
+
+        private void _PreloadVisibleCovers()
+        {
+            if (CSongs.IsInCategory)
+            {
+                var coverType = CCover._SongSortingToType(_Sso.Sorting.SongSorting);
+                foreach (var song in CSongs.VisibleSongs)
+                {
+                    if (song == null)
+                        continue;
+
+                    if (string.IsNullOrEmpty(song.Cover))
+                    {
+                        var text = _GetGeneratedCoverText(song, coverType);
+                        if (!string.IsNullOrEmpty(text))
+                            CCover.GenerateCover(text, coverType, song);
+                    }
+                }
+            }
+            else
+            {
+                foreach (var category in CSongs.Categories)
+                {
+                    if (category == null || string.IsNullOrEmpty(category.Name))
+                        continue;
+
+                    var coverType = CCover._SongSortingToType(_Sso.Sorting.SongSorting);
+                    CCover.GenerateCover(category.Name, coverType, null);
+                }
+            }
+        }
+    
+        private static string _GetGeneratedCoverText(CSong song, ECoverGeneratorType coverType)
+        {
+            switch (coverType)
+            {
+                case ECoverGeneratorType.Artist:
+                    return song.Artist;
+                case ECoverGeneratorType.Folder:
+                    return song.FolderName;
+                case ECoverGeneratorType.Edition:
+                    return song.Edition;
+                case ECoverGeneratorType.Genre:
+                    return song.Genre;
+                case ECoverGeneratorType.Language:
+                    return song.Language;
+                case ECoverGeneratorType.Year:
+                    return song.Year;
+                case ECoverGeneratorType.Decade:
+                    return song.Decade;
+                case ECoverGeneratorType.Tags:
+                    return song.Tags != null && song.Tags.Length > 0 ? song.Tags[0] : "";
+                case ECoverGeneratorType.Date:
+                    return song.DateAdded;
+                case ECoverGeneratorType.Letter:
+                    return !string.IsNullOrEmpty(song.Artist) ? song.Artist.Substring(0, 1) : "";
+                default:
+                    return "";
+            }
         }
 
         public override void OnClose()
