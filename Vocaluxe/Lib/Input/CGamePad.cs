@@ -306,12 +306,12 @@ namespace Vocaluxe.Lib.Input
         private void _HandleButtons(GamePadState buttonStates)
         {
             var leftClickTriggered =
-                buttonStates.Buttons.LeftShoulder == OpenTK.Input.ButtonState.Pressed &&
-                _oldButtonStates.Buttons.LeftShoulder == OpenTK.Input.ButtonState.Released;
+                buttonStates.Buttons.X == OpenTK.Input.ButtonState.Pressed &&
+                _oldButtonStates.Buttons.X == OpenTK.Input.ButtonState.Released;
 
             var rightClickTriggered =
-                buttonStates.Buttons.RightShoulder == OpenTK.Input.ButtonState.Pressed &&
-                _oldButtonStates.Buttons.RightShoulder == OpenTK.Input.ButtonState.Released;
+                buttonStates.Buttons.Y == OpenTK.Input.ButtonState.Pressed &&
+                _oldButtonStates.Buttons.Y == OpenTK.Input.ButtonState.Released;
 
             leftClickTriggered |=
                 buttonStates.Buttons.RightStick == OpenTK.Input.ButtonState.Pressed &&
@@ -377,14 +377,18 @@ namespace Vocaluxe.Lib.Input
 
             _AddRepeatedKey(
                 keys,
+                buttonStates.Buttons.LeftShoulder == OpenTK.Input.ButtonState.Pressed ||
                 buttonStates.Triggers.Left >= TriggerThreshold,
+                _oldButtonStates.Buttons.LeftShoulder == OpenTK.Input.ButtonState.Pressed ||
                 _oldButtonStates.Triggers.Left >= TriggerThreshold,
                 _leftTriggerTimer,
                 Keys.PageUp);
 
             _AddRepeatedKey(
                 keys,
+                buttonStates.Buttons.RightShoulder == OpenTK.Input.ButtonState.Pressed ||
                 buttonStates.Triggers.Right >= TriggerThreshold,
+                _oldButtonStates.Buttons.RightShoulder == OpenTK.Input.ButtonState.Pressed ||
                 _oldButtonStates.Triggers.Right >= TriggerThreshold,
                 _rightTriggerTimer,
                 Keys.PageDown);
