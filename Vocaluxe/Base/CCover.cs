@@ -18,8 +18,12 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Drawing;
+using System.Drawing.Imaging;
 using System.IO;
 using System.Linq;
+using System.Security.Cryptography;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using VocaluxeLib;
@@ -34,6 +38,8 @@ namespace Vocaluxe.Base
     {
         private const string _NoCoverName = "No Cover";
         private const string _NoCoverNameAlt = "NoCover";
+        private const string _CoverCacheFolderName = "CoverCache";
+        private const int _CoverCacheVersion = 1;
         private static readonly Dictionary<string, CTextureRef> _Covers = new Dictionary<string, CTextureRef>();
         private static readonly Dictionary<ECoverGeneratorType, CCoverGenerator> _CoverGenerators = new Dictionary<ECoverGeneratorType, CCoverGenerator>();
         private static readonly List<SThemeCover> _CoverThemes = new List<SThemeCover>();
@@ -103,21 +109,32 @@ namespace Vocaluxe.Base
                 return texture;
             }
 
+            if (_TryLoadCachedCover(text, type, firstSong, out texture))
+            {
+                lock (_Covers)
+                {
+                    if (!_CoverExists(text))
+                        _Covers.Add(text, texture);
+                }
+                return texture;
+            }
+
             texture = CDraw.CopyTexture(NoCover);
             Task.Factory.StartNew(() =>
             {
                 _CancelToken.Token.ThrowIfCancellationRequested();
-                var coverBmp = !_CoverGenerators.ContainsKey(type)
-                    ? null : _CoverGenerators[type].GetCover(text, firstSong != null ? Path.Combine(firstSong.Folder, firstSong.Cover) : null);
+                var firstCoverPath = firstSong != null ? Path.Combine(firstSong.Folder, firstSong.Cover) : null;
+                var coverBmp = !_CoverGenerators.ContainsKey(type) ? null : _CoverGenerators[type].GetCover(text, firstCoverPath);
                 _CancelToken.Token.ThrowIfCancellationRequested();
                 if (coverBmp == null && _CoverGenerators.ContainsKey(ECoverGeneratorType.Default))
                 {
-                    coverBmp = _CoverGenerators[ECoverGeneratorType.Default].GetCover(text, firstSong != null ? Path.Combine(firstSong.Folder, firstSong.Cover) : null);
+                    coverBmp = _CoverGenerators[ECoverGeneratorType.Default].GetCover(text, firstCoverPath);
                 }
 
                 _CancelToken.Token.ThrowIfCancellationRequested();
                 if (coverBmp != null)
                 {
+                    _TrySaveCachedCover(text, type, firstSong, coverBmp);
                     CDraw.EnqueueTextureUpdate(texture, coverBmp);
                 }
 
@@ -257,6 +274,7 @@ namespace Vocaluxe.Base
                 }
             }
 
+            _LoadCachedCovers(coverTheme);
             _LoadCoverGenerators(coverTheme);
             return true;
         }
@@ -323,6 +341,96 @@ namespace Vocaluxe.Base
                 {
                     _Covers.Add(name, CDraw.AddTexture(file));
                 }
+            }
+        }
+        private static void _LoadCachedCovers(SThemeCover coverTheme)
+        {
+            var cacheFolder = _GetCoverCacheFolder(coverTheme);
+            if (!Directory.Exists(cacheFolder))
+                return;
+
+            var files = CHelper.ListImageFiles(cacheFolder, true, true);
+            lock (_Covers)
+            {
+                foreach (var file in files)
+                {
+                    var name = Path.GetFileNameWithoutExtension(file);
+                    if (!_CoverExists(name))
+                        _Covers.Add(name, CDraw.AddTexture(file));
+                }
+            }
+        }
+
+        private static bool _TryLoadCachedCover(string text, ECoverGeneratorType type, CSong firstSong, out CTextureRef texture)
+        {
+            texture = null;
+
+            var coverTheme = _GetCoverTheme();
+            var cachePath = _GetCoverCacheFilePath(text, type, firstSong, coverTheme);
+            if (!File.Exists(cachePath))
+                return false;
+
+            texture = CDraw.AddTexture(cachePath);
+            return true;
+        }
+
+        private static void _TrySaveCachedCover(string text, ECoverGeneratorType type, CSong firstSong, Bitmap bmp)
+        {
+            try
+            {
+                var coverTheme = _GetCoverTheme();
+                var cachePath = _GetCoverCacheFilePath(text, type, firstSong, coverTheme);
+                var cacheFolder = Path.GetDirectoryName(cachePath);
+                if (string.IsNullOrEmpty(cacheFolder))
+                    return;
+
+                Directory.CreateDirectory(cacheFolder);
+
+                var tmpPath = cachePath + ".tmp";
+                bmp.Save(tmpPath, ImageFormat.Png);
+
+                if (File.Exists(cachePath))
+                    File.Delete(cachePath);
+
+                File.Move(tmpPath, cachePath);
+            }
+            catch (Exception e)
+            {
+                CLog.Error("Error writing generated cover cache: " + e);
+            }
+        }
+
+        private static string _GetCoverCacheFolder(SThemeCover coverTheme)
+        {
+            return Path.Combine(CSettings.ProgramFolder, _CoverCacheFolderName, coverTheme.Info.Name);
+        }
+
+        private static string _GetCoverCacheFilePath(string text, ECoverGeneratorType type, CSong firstSong, SThemeCover coverTheme)
+        {
+            return Path.Combine(_GetCoverCacheFolder(coverTheme), _GetCoverCacheKey(text, type, firstSong, coverTheme) + ".png");
+        }
+
+        private static string _GetCoverCacheKey(string text, ECoverGeneratorType type, CSong firstSong, SThemeCover coverTheme)
+        {
+            var firstCoverPath = firstSong != null ? Path.Combine(firstSong.Folder, firstSong.Cover) : "";
+            var firstCoverStamp = "";
+
+            if (!string.IsNullOrEmpty(firstCoverPath) && File.Exists(firstCoverPath))
+                firstCoverStamp = File.GetLastWriteTimeUtc(firstCoverPath).Ticks.ToString();
+
+            var rawKey = string.Join("|",
+                _CoverCacheVersion,
+                coverTheme.Info.Name,
+                type,
+                text,
+                firstCoverPath,
+                firstCoverStamp
+            );
+
+            using (var sha = SHA256.Create())
+            {
+                var hash = sha.ComputeHash(Encoding.UTF8.GetBytes(rawKey));
+                return BitConverter.ToString(hash).Replace("-", "");
             }
         }
     }
