@@ -103,11 +103,13 @@ namespace Vocaluxe.Base
 
         public static CTextureRef GenerateCover(string text, ECoverGeneratorType type, CSong firstSong)
         {
-            var texture = Cover(text);
-            if (texture != NoCover)
+            lock (_Covers)
             {
-                return texture;
+                if (_CoverExists(text))
+                    return _Covers[text];
             }
+
+            CTextureRef texture;
 
             if (_TryLoadCachedCover(text, type, firstSong, out texture))
             {
@@ -115,6 +117,8 @@ namespace Vocaluxe.Base
                 {
                     if (!_CoverExists(text))
                         _Covers.Add(text, texture);
+                    else
+                        texture = _Covers[text];
                 }
                 return texture;
             }
@@ -140,11 +144,7 @@ namespace Vocaluxe.Base
 
                 _CancelToken.Token.ThrowIfCancellationRequested();
             }, _CancelToken.Token);
-            lock (_Covers)
-            {
-                _Covers.Add(text, texture);
-            }
-
+            
             return texture;
         }
 
@@ -274,7 +274,6 @@ namespace Vocaluxe.Base
                 }
             }
 
-            _LoadCachedCovers(coverTheme);
             _LoadCoverGenerators(coverTheme);
             return true;
         }
@@ -343,35 +342,26 @@ namespace Vocaluxe.Base
                 }
             }
         }
-        private static void _LoadCachedCovers(SThemeCover coverTheme)
-        {
-            var cacheFolder = _GetCoverCacheFolder(coverTheme);
-            if (!Directory.Exists(cacheFolder))
-                return;
-
-            var files = CHelper.ListImageFiles(cacheFolder, true, true);
-            lock (_Covers)
-            {
-                foreach (var file in files)
-                {
-                    var name = Path.GetFileNameWithoutExtension(file);
-                    if (!_CoverExists(name))
-                        _Covers.Add(name, CDraw.AddTexture(file));
-                }
-            }
-        }
-
+        
         private static bool _TryLoadCachedCover(string text, ECoverGeneratorType type, CSong firstSong, out CTextureRef texture)
         {
             texture = null;
-
-            var coverTheme = _GetCoverTheme();
-            var cachePath = _GetCoverCacheFilePath(text, type, firstSong, coverTheme);
-            if (!File.Exists(cachePath))
+            try
+            {
+                var coverTheme = _GetCoverTheme();
+                var cachePath = _GetCoverCacheFilePath(text, type, firstSong, coverTheme);
+                if (!File.Exists(cachePath))
+                    return false;
                 return false;
 
-            texture = CDraw.AddTexture(cachePath);
-            return true;
+                texture = CDraw.AddTexture(cachePath);
+                return texture != null;
+            }
+            catch (Exception e)
+            {
+                CLog.Error("Error loading generated cover cache: " + e);
+                return false;
+            }
         }
 
         private static void _TrySaveCachedCover(string text, ECoverGeneratorType type, CSong firstSong, Bitmap bmp)
