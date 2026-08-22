@@ -352,7 +352,6 @@ namespace Vocaluxe.Base
                 var cachePath = _GetCoverCacheFilePath(text, type, firstSong, coverTheme);
                 if (!File.Exists(cachePath))
                     return false;
-                return false;
 
                 texture = CDraw.AddTexture(cachePath);
                 return texture != null;
