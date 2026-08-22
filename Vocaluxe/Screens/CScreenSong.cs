@@ -1056,7 +1056,7 @@ namespace Vocaluxe.Screens
             }
         }
     
-        private static string _GetGeneratedCoverText(VocaluxeLib.Songs.CSong song, ECoverGeneratorType coverType)
+        private static string _GetGeneratedCoverText(CSong song, ECoverGeneratorType coverType)
         {
             switch (coverType)
             {
@@ -1065,19 +1065,21 @@ namespace Vocaluxe.Screens
                 case ECoverGeneratorType.Folder:
                     return song.FolderName;
                 case ECoverGeneratorType.Edition:
-                    return song.Edition;
+                    return song.Editions.Count > 0 ? song.Editions[0] : "";
                 case ECoverGeneratorType.Genre:
-                    return song.Genre;
+                    return song.Genres.Count > 0 ? song.Genres[0] : "";
                 case ECoverGeneratorType.Language:
-                    return song.Language;
+                    return song.Languages.Count > 0 ? song.Languages[0] : "";
                 case ECoverGeneratorType.Year:
                     return song.Year;
                 case ECoverGeneratorType.Decade:
-                    return song.Decade;
+                    return !string.IsNullOrEmpty(song.Year) && song.Year.Length >= 3
+                        ? song.Year.Substring(0, 3) + "0s"
+                        : "";
                 case ECoverGeneratorType.Tags:
-                    return song.Tags != null && song.Tags.Length > 0 ? song.Tags[0] : "";
+                    return song.Tags.Count > 0 ? song.Tags[0] : "";
                 case ECoverGeneratorType.Date:
-                    return song.DateAdded;
+                    return song.DateAdded.ToString("yyyy-MM-dd");
                 case ECoverGeneratorType.Letter:
                     return !string.IsNullOrEmpty(song.Artist) ? song.Artist.Substring(0, 1) : "";
                 default:
