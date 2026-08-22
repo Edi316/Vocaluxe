@@ -69,14 +69,6 @@
         <Font>Outline</Font>
         <Text>TR_BUTTON_BACK</Text>
       </Text>
-      <Reflection>
-        <Height>39</Height>
-        <Space>15</Space>
-      </Reflection>
-      <SelReflection>
-        <Height>39</Height>
-        <Space>15</Space>
-      </SelReflection>
     </Button>
     <Button Name="ButtonNext">
       <Skin>Button</Skin>
@@ -104,14 +96,6 @@
         <Font>Outline</Font>
         <Text>TR_BUTTON_NEXT</Text>
       </Text>
-      <Reflection>
-        <Height>39</Height>
-        <Space>15</Space>
-      </Reflection>
-      <SelReflection>
-        <Height>39</Height>
-        <Space>15</Space>
-      </SelReflection>
     </Button>
     <Button Name="ButtonRandom">
       <Skin>Button</Skin>
@@ -139,14 +123,6 @@
         <Font>Outline</Font>
         <Text>TR_SCREENNAMES_BUTTON_RANDOM</Text>
       </Text>
-      <Reflection>
-        <Height>39</Height>
-        <Space>15</Space>
-      </Reflection>
-      <SelReflection>
-        <Height>39</Height>
-        <Space>15</Space>
-      </SelReflection>
     </Button>
     <Button Name="ButtonIncreaseTeams">
       <Skin>Plus</Skin>
