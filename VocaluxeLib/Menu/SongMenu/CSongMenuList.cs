@@ -239,7 +239,7 @@ namespace VocaluxeLib.Menu.SongMenu
 
                 if (tileNr < _RowBackgrounds.Count)
                 {
-                    _RowBackgrounds[tileNr].Color = new SColorF(1f, 1f, 1f, 0.25f);
+                    _RowBackgrounds[tileNr].Color = new SColorF(0.1f, 0.1f, 0.1f, 0.6f);
                 }
             }
         }
