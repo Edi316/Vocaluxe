@@ -287,14 +287,6 @@
         <Font>Outline</Font>
         <Text>TR_BUTTON_NEXT_ROUND</Text>
       </Text>
-      <Reflection>
-        <Height>39</Height>
-        <Space>15</Space>
-      </Reflection>
-      <SelReflection>
-        <Height>39</Height>
-        <Space>15</Space>
-      </SelReflection>
     </Button>
     <Button Name="ButtonBack">
       <Skin>Button</Skin>
@@ -322,14 +314,6 @@
         <Font>Outline</Font>
         <Text>TR_BUTTON_BACK</Text>
       </Text>
-      <Reflection>
-        <Height>39</Height>
-        <Space>15</Space>
-      </Reflection>
-      <SelReflection>
-        <Height>39</Height>
-        <Space>15</Space>
-      </SelReflection>
     </Button>
     <Button Name="ButtonExit">
       <Skin>Button</Skin>
@@ -357,14 +341,6 @@
         <Font>Outline</Font>
         <Text>TR_BUTTON_EXIT</Text>
       </Text>
-      <Reflection>
-        <Height>39</Height>
-        <Space>15</Space>
-      </Reflection>
-      <SelReflection>
-        <Height>39</Height>
-        <Space>15</Space>
-      </SelReflection>
     </Button>
     <Button Name="ButtonPopupYes">
       <Skin>Button</Skin>
@@ -392,14 +368,6 @@
         <Font>Outline</Font>
         <Text>TR_BUTTON_YES</Text>
       </Text>
-      <Reflection>
-        <Height>39</Height>
-        <Space>15</Space>
-      </Reflection>
-      <SelReflection>
-        <Height>39</Height>
-        <Space>15</Space>
-      </SelReflection>
     </Button>
     <Button Name="ButtonPopupNo">
       <Skin>Button</Skin>
@@ -427,14 +395,6 @@
         <Font>Outline</Font>
         <Text>TR_BUTTON_NO</Text>
       </Text>
-      <Reflection>
-        <Height>39</Height>
-        <Space>15</Space>
-      </Reflection>
-      <SelReflection>
-        <Height>39</Height>
-        <Space>15</Space>
-      </SelReflection>
     </Button>
     <Button Name="ButtonPlayerScrollDown">
       <Skin>ScrollDown</Skin>
