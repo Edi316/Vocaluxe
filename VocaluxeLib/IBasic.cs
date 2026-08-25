@@ -19,11 +19,14 @@ using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Drawing;
+using System.IO;
 using VocaluxeLib.Draw;
 using VocaluxeLib.Game;
 using VocaluxeLib.Menu;
 using VocaluxeLib.Profile;
 using VocaluxeLib.Songs;
+using VocaluxeLib.Songs.Sources;
+using VocaluxeLib.Utils.Player;
 
 namespace VocaluxeLib
 {
@@ -261,7 +264,7 @@ namespace VocaluxeLib
 
     public interface IVideo
     {
-        CVideoStream Load(string videoFileName);
+        CVideoStream LoadStream(Stream videoStream);
         bool Skip(CVideoStream stream, float startPosition, float videoGap);
         bool GetFrame(CVideoStream stream, float time);
         bool IsFinished(CVideoStream stream);
@@ -273,7 +276,7 @@ namespace VocaluxeLib
 
     public interface ISound
     {
-        int Load(string soundFile, bool loop = false, bool prescan = false);
+        int Load(ISoundSource source, bool loop = false, bool prescan = false);
         void SetPosition(int streamId, float newPosition);
         void Play(int streamId);
         void Fade(int streamId, int targetVolume, float duration, EStreamAction afterFadeAction = EStreamAction.Nothing);
