@@ -491,30 +491,57 @@ namespace Vocaluxe.Base
             _CoverLoaderThread.Start();
         }
 
-        private static void _LoadCovers()
+        private static void _LoadCovers(CancellationToken cancellationToken)
         {
-            using (CBenchmark.Time("Loaded Covers"))
+            try
             {
-                var songCount = Songs.Count;
-                var ev = new AutoResetEvent(songCount == 0);
-
-                NumSongsWithCoverLoaded = 0;
-                foreach (var song in Songs)
+                using (CBenchmark.Time("Loaded Covers"))
                 {
-                    var tmp = song;
-                    Task.Factory.StartNew(() =>
-                    {
-                        tmp.LoadSmallCover();
-                        if (Interlocked.Increment(ref _NumSongsWithCoverLoaded) >= songCount)
-                        {
-                            ev.Set();
-                        }
-                    });
-                }
+                    var songCount = Songs.Count;
+                    var ev = new AutoResetEvent(songCount == 0);
 
-                ev.WaitOne();
-                _CoverLoaded = true;
-                CDataBase.CommitCovers();
+                    NumSongsWithCoverLoaded = 0;
+
+                    foreach (var song in Songs)
+                    {
+                        if (cancellationToken.IsCancellationRequested)
+                            break;
+
+                        var tmp = song;
+
+                        Task.Factory.StartNew(() =>
+                        {
+                            try
+                            {
+                                if (!cancellationToken.IsCancellationRequested)
+                                    tmp.LoadSmallCover();
+                            }
+                            finally
+                            {
+                                if (Interlocked.Increment(ref _NumSongsWithCoverLoaded)
+                                    >= songCount)
+                                {
+                                    ev.Set();
+                                }
+                            }
+                        }, cancellationToken);
+                    }
+
+                    ev.WaitOne();
+
+                    if (!cancellationToken.IsCancellationRequested)
+                    {
+                        _CoverLoaded = true;
+                        CDataBase.CommitCovers();
+                    }
+                }
+            }
+            finally
+            {
+                lock (_CoverLoaderLock)
+                {
+                    _CoverLoaderThread = null;
+                }
             }
         }
     }
