@@ -394,7 +394,6 @@ namespace Vocaluxe.Base
         {
             using (CBenchmark.Time("Load Songs"))
             {
-                _CancelCoverLoading();
                 SongsLoaded = false;
                 Songs.Clear();
                 _NumSongsLoaded = 0;
@@ -492,81 +491,30 @@ namespace Vocaluxe.Base
             _CoverLoaderThread.Start();
         }
 
-        private static void _LoadCovers(CancellationToken cancellationToken)
+        private static void _LoadCovers()
         {
-            try
+            using (CBenchmark.Time("Loaded Covers"))
             {
-                using (CBenchmark.Time("Loaded Covers"))
-                {
-                    var songs = Songs.ToList();
-                    NumSongsWithCoverLoaded = 0;
+                var songCount = Songs.Count;
+                var ev = new AutoResetEvent(songCount == 0);
 
-                    var tasks = songs.Select(song => Task.Factory.StartNew(
-                        () =>
+                NumSongsWithCoverLoaded = 0;
+                foreach (var song in Songs)
+                {
+                    var tmp = song;
+                    Task.Factory.StartNew(() =>
+                    {
+                        tmp.LoadSmallCover();
+                        if (Interlocked.Increment(ref _NumSongsWithCoverLoaded) >= songCount)
                         {
-                            if (cancellationToken.IsCancellationRequested)
-                                return;
-
-                            song.LoadSmallCover();
-                            Interlocked.Increment(ref _NumSongsWithCoverLoaded);
-                        },
-                        cancellationToken,
-                        TaskCreationOptions.None,
-                        TaskScheduler.Default)).ToArray();
-
-                    try
-                    {
-                        Task.WaitAll(tasks);
-                    }
-                    catch (AggregateException)
-                    {
-                        if (!cancellationToken.IsCancellationRequested)
-                            throw;
-                    }
-
-                    if (!cancellationToken.IsCancellationRequested)
-                    {
-                        _CoverLoaded = true;
-                        CDataBase.CommitCovers();
-                    }
+                            ev.Set();
+                        }
+                    });
                 }
-            }
-            finally
-            {
-                lock (_CoverLoaderLock)
-                {
-                    _CoverLoaderThread = null;
-                }
-            }
-        }
 
-        private static void _CancelCoverLoading()
-        {
-            Thread coverLoaderThread;
-            CancellationTokenSource cancellationSource;
-
-            lock (_CoverLoaderLock)
-            {
-                coverLoaderThread = _CoverLoaderThread;
-                cancellationSource = _CoverLoadCancellation;
-            }
-
-            if (coverLoaderThread == null)
-                return;
-
-            cancellationSource?.Cancel();
-
-            if (coverLoaderThread != Thread.CurrentThread)
-                coverLoaderThread.Join();
-
-            lock (_CoverLoaderLock)
-            {
-                if (_CoverLoaderThread == coverLoaderThread)
-                {
-                    _CoverLoaderThread = null;
-                    _CoverLoadCancellation?.Dispose();
-                    _CoverLoadCancellation = null;
-                }
+                ev.WaitOne();
+                _CoverLoaded = true;
+                CDataBase.CommitCovers();
             }
         }
     }
