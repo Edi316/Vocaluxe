@@ -543,6 +543,36 @@ namespace Vocaluxe.Base
                     _CoverLoaderThread = null;
                 }
             }
+
+            private static void _CancelCoverLoading()
+            {
+                Thread coverLoaderThread;
+                CancellationTokenSource cancellationSource;
+
+                lock (_CoverLoaderLock)
+                {
+                    coverLoaderThread = _CoverLoaderThread;
+                    cancellationSource = _CoverLoadCancellation;
+                }
+
+                if (coverLoaderThread == null)
+                    return;
+
+                cancellationSource?.Cancel();
+
+                if (coverLoaderThread != Thread.CurrentThread)
+                    coverLoaderThread.Join();
+
+                lock (_CoverLoaderLock)
+                {
+                    if (_CoverLoaderThread == coverLoaderThread)
+                    {
+                        _CoverLoaderThread = null;
+                        _CoverLoadCancellation?.Dispose();
+                        _CoverLoadCancellation = null;
+                    }
+                }
+            }
         }
     }
 }
