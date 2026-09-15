@@ -394,6 +394,7 @@ namespace Vocaluxe.Base
         {
             using (CBenchmark.Time("Load Songs"))
             {
+                _CancelCoverLoading();
                 SongsLoaded = false;
                 Songs.Clear();
                 _NumSongsLoaded = 0;
@@ -497,37 +498,31 @@ namespace Vocaluxe.Base
             {
                 using (CBenchmark.Time("Loaded Covers"))
                 {
-                    var songCount = Songs.Count;
-                    var ev = new AutoResetEvent(songCount == 0);
-
+                    var songs = Songs.ToList();
                     NumSongsWithCoverLoaded = 0;
 
-                    foreach (var song in Songs)
-                    {
-                        if (cancellationToken.IsCancellationRequested)
-                            break;
-
-                        var tmp = song;
-
-                        Task.Factory.StartNew(() =>
+                    var tasks = songs.Select(song => Task.Factory.StartNew(
+                        () =>
                         {
-                            try
-                            {
-                                if (!cancellationToken.IsCancellationRequested)
-                                    tmp.LoadSmallCover();
-                            }
-                            finally
-                            {
-                                if (Interlocked.Increment(ref _NumSongsWithCoverLoaded)
-                                    >= songCount)
-                                {
-                                    ev.Set();
-                                }
-                            }
-                        }, cancellationToken);
-                    }
+                            if (cancellationToken.IsCancellationRequested)
+                                return;
 
-                    ev.WaitOne();
+                            song.LoadSmallCover();
+                            Interlocked.Increment(ref _NumSongsWithCoverLoaded);
+                        },
+                        cancellationToken,
+                        TaskCreationOptions.None,
+                        TaskScheduler.Default)).ToArray();
+
+                    try
+                    {
+                        Task.WaitAll(tasks);
+                    }
+                    catch (AggregateException)
+                    {
+                        if (!cancellationToken.IsCancellationRequested)
+                            throw;
+                    }
 
                     if (!cancellationToken.IsCancellationRequested)
                     {
@@ -543,34 +538,34 @@ namespace Vocaluxe.Base
                     _CoverLoaderThread = null;
                 }
             }
+        }
 
-            private static void _CancelCoverLoading()
+        private static void _CancelCoverLoading()
+        {
+            Thread coverLoaderThread;
+            CancellationTokenSource cancellationSource;
+
+            lock (_CoverLoaderLock)
             {
-                Thread coverLoaderThread;
-                CancellationTokenSource cancellationSource;
+                coverLoaderThread = _CoverLoaderThread;
+                cancellationSource = _CoverLoadCancellation;
+            }
 
-                lock (_CoverLoaderLock)
+            if (coverLoaderThread == null)
+                return;
+
+            cancellationSource?.Cancel();
+
+            if (coverLoaderThread != Thread.CurrentThread)
+                coverLoaderThread.Join();
+
+            lock (_CoverLoaderLock)
+            {
+                if (_CoverLoaderThread == coverLoaderThread)
                 {
-                    coverLoaderThread = _CoverLoaderThread;
-                    cancellationSource = _CoverLoadCancellation;
-                }
-
-                if (coverLoaderThread == null)
-                    return;
-
-                cancellationSource?.Cancel();
-
-                if (coverLoaderThread != Thread.CurrentThread)
-                    coverLoaderThread.Join();
-
-                lock (_CoverLoaderLock)
-                {
-                    if (_CoverLoaderThread == coverLoaderThread)
-                    {
-                        _CoverLoaderThread = null;
-                        _CoverLoadCancellation?.Dispose();
-                        _CoverLoadCancellation = null;
-                    }
+                    _CoverLoaderThread = null;
+                    _CoverLoadCancellation?.Dispose();
+                    _CoverLoadCancellation = null;
                 }
             }
         }
