@@ -515,7 +515,7 @@
     </Button>
     <Button Name="ButtonOptionsClose">
       <Skin>SongSelectButton</Skin>
-      <SkinSelected>SongSelectButton</SkinSelected>
+      <SkinSelected>SelectSlideSongOptions</SkinSelected>
       <Rect>
         <X>60</X>
         <Y>554</Y>
@@ -542,7 +542,7 @@
     </Button>
     <Button Name="ButtonOptionsPlaylist">
       <Skin>SongSelectButton</Skin>
-      <SkinSelected>SongSelectButton</SkinSelected>
+      <SkinSelected>SelectSlideSongOptions</SkinSelected>
       <Rect>
         <X>60</X>
         <Y>451</Y>
@@ -569,7 +569,7 @@
     </Button>
     <Button Name="ButtonOptionsSing">
       <Skin>SongSelectButton</Skin>
-      <SkinSelected>SongSelectButton</SkinSelected>
+      <SkinSelected>SelectSlideSongOptions</SkinSelected>
       <Rect>
         <X>60</X>
         <Y>104</Y>
@@ -596,7 +596,7 @@
     </Button>
     <Button Name="ButtonOptionsRandom">
       <Skin>SongSelectButton</Skin>
-      <SkinSelected>SongSelectButton</SkinSelected>
+      <SkinSelected>SelectSlideSongOptions</SkinSelected>
       <Rect>
         <X>60</X>
         <Y>135</Y>
@@ -623,7 +623,7 @@
     </Button>
     <Button Name="ButtonOptionsRandomCategory">
       <Skin>SongSelectButton</Skin>
-      <SkinSelected>SongSelectButton</SkinSelected>
+      <SkinSelected>SelectSlideSongOptions</SkinSelected>
       <Rect>
         <X>60</X>
         <Y>135</Y>
@@ -650,7 +650,7 @@
     </Button>
     <Button Name="ButtonOptionsSingAll">
       <Skin>SongSelectButton</Skin>
-      <SkinSelected>SongSelectButton</SkinSelected>
+      <SkinSelected>SelectSlideSongOptions</SkinSelected>
       <Rect>
         <X>60</X>
         <Y>337.5</Y>
@@ -677,7 +677,7 @@
     </Button>
     <Button Name="ButtonOptionsSingAllVisible">
       <Skin>SongSelectButton</Skin>
-      <SkinSelected>SongSelectButton</SkinSelected>
+      <SkinSelected>SelectSlideSongOptions</SkinSelected>
       <Rect>
         <X>60</X>
         <Y>405</Y>
@@ -704,7 +704,7 @@
     </Button>
     <Button Name="ButtonOptionsOpenSelectedItem">
       <Skin>SongSelectButton</Skin>
-      <SkinSelected>SongSelectButton</SkinSelected>
+      <SkinSelected>SelectSlideSongOptions</SkinSelected>
       <Rect>
         <X>60</X>
         <Y>202.5</Y>
@@ -785,7 +785,7 @@
     </Button>
     <Button Name="ButtonOptionsRandomMedley">
       <Skin>SongSelectButton</Skin>
-      <SkinSelected>SongSelectButton</SkinSelected>
+      <SkinSelected>SelectSlideSongOptions</SkinSelected>
       <Rect>
         <X>60</X>
         <Y>472.5</Y>
@@ -839,7 +839,7 @@
     </Button>
     <Button Name="ButtonOptionsHighscore">
       <Skin>SongSelectButton</Skin>
-      <SkinSelected>SongSelectButton</SkinSelected>
+      <SkinSelected>SelectSlideSongOptions</SkinSelected>
       <Rect>
         <X>60</X>
         <Y>497.5</Y>
@@ -1241,7 +1241,7 @@
       <Skin>SongSelectButton</Skin>
       <SkinArrowLeft>SelectSlideArrowLeft</SkinArrowLeft>
       <SkinArrowRight>SelectSlideArrowRight</SkinArrowRight>
-      <SkinSelected>SongSelectButton</SkinSelected>
+      <SkinSelected>SelectSlideSongOptions</SkinSelected>
       <SkinArrowLeftSelected>SelectSlideArrowLeft</SkinArrowLeftSelected>
       <SkinArrowRightSelected>SelectSlideArrowRight</SkinArrowRightSelected>
       <Rect>
@@ -1283,7 +1283,7 @@
       <Skin>SongSelectButton</Skin>
       <SkinArrowLeft>SelectSlideArrowLeft</SkinArrowLeft>
       <SkinArrowRight>SelectSlideArrowRight</SkinArrowRight>
-      <SkinSelected>SongSelectButton</SkinSelected>
+      <SkinSelected>SelectSlideSongOptions</SkinSelected>
       <SkinArrowLeftSelected>SelectSlideArrowLeft</SkinArrowLeftSelected>
       <SkinArrowRightSelected>SelectSlideArrowRight</SkinArrowRightSelected>
       <Rect>
@@ -1325,7 +1325,7 @@
       <Skin>SongSelectButton</Skin>
       <SkinArrowLeft>SelectSlideArrowLeft</SkinArrowLeft>
       <SkinArrowRight>SelectSlideArrowRight</SkinArrowRight>
-      <SkinSelected>SongSelectButton</SkinSelected>
+      <SkinSelected>SelectSlideSongOptions</SkinSelected>
       <SkinArrowLeftSelected>SelectSlideArrowLeft</SkinArrowLeftSelected>
       <SkinArrowRightSelected>SelectSlideArrowRight</SkinArrowRightSelected>
       <Rect>
@@ -1367,7 +1367,7 @@
       <Skin>SongSelectButton</Skin>
       <SkinArrowLeft>SelectSlideArrowLeft</SkinArrowLeft>
       <SkinArrowRight>SelectSlideArrowRight</SkinArrowRight>
-      <SkinSelected>SongSelectButton</SkinSelected>
+      <SkinSelected>SelectSlideSongOptions</SkinSelected>
       <SkinArrowLeftSelected>SelectSlideArrowLeft</SkinArrowLeftSelected>
       <SkinArrowRightSelected>SelectSlideArrowRight</SkinArrowRightSelected>
       <Rect>
@@ -1409,7 +1409,7 @@
       <Skin>SongSelectButton</Skin>
       <SkinArrowLeft>SelectSlideArrowLeft</SkinArrowLeft>
       <SkinArrowRight>SelectSlideArrowRight</SkinArrowRight>
-      <SkinSelected>SongSelectButton</SkinSelected>
+      <SkinSelected>SelectSlideSongOptions</SkinSelected>
       <SkinArrowLeftSelected>SelectSlideArrowLeft</SkinArrowLeftSelected>
       <SkinArrowRightSelected>SelectSlideArrowRight</SkinArrowRightSelected>
       <Rect>
@@ -1451,7 +1451,7 @@
       <Skin>SongSelectButton</Skin>
       <SkinArrowLeft>SelectSlideArrowLeft</SkinArrowLeft>
       <SkinArrowRight>SelectSlideArrowRight</SkinArrowRight>
-      <SkinSelected>SongSelectButton</SkinSelected>
+      <SkinSelected>SelectSlideSongOptions</SkinSelected>
       <SkinArrowLeftSelected>SelectSlideArrowLeft</SkinArrowLeftSelected>
       <SkinArrowRightSelected>SelectSlideArrowRight</SkinArrowRightSelected>
       <Rect>
