@@ -102,13 +102,13 @@
       <R>0.200</R>
       <G>0.800</G>
       <B>0.990</B>
-      <A>1.000</A>
+      <A>0.700</A>
     </ButtonSelColor>
     <ButtonTextColor>
       <R>0.690</R>
       <G>0.690</G>
       <B>0.690</B>
-      <A>0.700</A>
+      <A>0.800</A>
     </ButtonTextColor>
     <ButtonTextSelColor>
       <R>0.890</R>
