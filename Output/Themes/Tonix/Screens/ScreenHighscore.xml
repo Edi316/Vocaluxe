@@ -29,10 +29,10 @@
       <Skin />
       <Color Name="Top1Color" />
       <Rect>
-        <X>120</X>
-        <Y>155</Y>
-        <W>1620</W>
-        <H>52.5</H>
+        <X>50</X>
+        <Y>145</Y>
+        <W>1760</W>
+        <H>72</H>
         <Z>0</Z>
       </Rect>
     </Static>
@@ -40,9 +40,9 @@
       <Skin />
       <Color Name="Top2Color" />
       <Rect>
-        <X>120</X>
+        <X>85</X>
         <Y>245</Y>
-        <W>1620</W>
+        <W>1680</W>
         <H>52.5</H>
         <Z>0</Z>
       </Rect>
@@ -51,9 +51,9 @@
       <Skin />
       <Color Name="Top3Color" />
       <Rect>
-        <X>120</X>
+        <X>110</X>
         <Y>335</Y>
-        <W>1620</W>
+        <W>1630</W>
         <H>52.5</H>
         <Z>0</Z>
       </Rect>
@@ -104,9 +104,9 @@
     </Text>
     <Text Name="TextNumber1">
       <X>180</X>
-      <Y>154.5</Y>
+      <Y>148</Y>
       <Z>-2</Z>
-      <H>52.5</H>
+      <H>66</H>
       <MaxW>0</MaxW>
       <Color Name="TextColor" />
       <SelColor Name="TextSelColor" />
@@ -244,9 +244,9 @@
     </Text>
     <Text Name="TextName1">
       <X>300</X>
-      <Y>154.5</Y>
+      <Y>148</Y>
       <Z>-2</Z>
-      <H>52.5</H>
+      <H>66</H>
       <MaxW>0</MaxW>
       <Color Name="TextColor" />
       <SelColor Name="TextSelColor" />
@@ -384,9 +384,9 @@
     </Text>
     <Text Name="TextScore1">
       <X>1200</X>
-      <Y>154.5</Y>
+      <Y>148</Y>
       <Z>-2</Z>
-      <H>52.5</H>
+      <H>66</H>
       <MaxW>0</MaxW>
       <Color Name="TextColor" />
       <SelColor Name="TextSelColor" />
@@ -524,9 +524,9 @@
     </Text>
     <Text Name="TextDate1">
       <X>1500</X>
-      <Y>154.5</Y>
+      <Y>148</Y>
       <Z>-2</Z>
-      <H>52.5</H>
+      <H>66</H>
       <MaxW>0</MaxW>
       <Color Name="TextColor" />
       <SelColor Name="TextSelColor" />
@@ -675,10 +675,10 @@
     <ParticleEffect Name="ParticleEffectNew1">
       <Skin>Star</Skin>
       <Rect>
-        <X>120</X>
-        <Y>150</Y>
-        <W>1620</W>
-        <H>52.5</H>
+        <X>50</X>
+        <Y>145</Y>
+        <W>1760</W>
+        <H>72</H>
         <Z>-1</Z>
       </Rect>
       <Color Name="StaticColor" />
@@ -689,9 +689,9 @@
     <ParticleEffect Name="ParticleEffectNew2">
       <Skin>Star</Skin>
       <Rect>
-        <X>120</X>
+        <X>85</X>
         <Y>240</Y>
-        <W>1620</W>
+        <W>1680</W>
         <H>52.5</H>
         <Z>-1</Z>
       </Rect>
@@ -703,9 +703,9 @@
     <ParticleEffect Name="ParticleEffectNew3">
       <Skin>Star</Skin>
       <Rect>
-        <X>120</X>
+        <X>110</X>
         <Y>330</Y>
-        <W>1620</W>
+        <W>1630</W>
         <H>52.5</H>
         <Z>-1</Z>
       </Rect>
