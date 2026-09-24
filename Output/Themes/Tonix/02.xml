@@ -99,10 +99,10 @@
       <A>0.300</A>
     </ButtonColor>
     <ButtonSelColor>
-      <R>0.200</R>
-      <G>0.800</G>
-      <B>0.990</B>
-      <A>0.700</A>
+      <R>0.518</R>
+      <G>0.251</G>
+      <B>0.612</B>
+      <A>0.900</A>
     </ButtonSelColor>
     <ButtonTextColor>
       <R>0.690</R>
@@ -349,6 +349,7 @@
     <TimeLine>TimeLine.png</TimeLine>
     <Pointer>Pointer.png</Pointer>
     <SelectSlide>SelectSlide.png</SelectSlide>
+    <SelectSlideSongOptions>SelectSlideSongOptions.png</SelectSlideSongOptions>
     <SelectSlidePlayer>SelectSlidePlayer.png</SelectSlidePlayer>
     <SelectSlideArrowLeft>SelectSlideArrowLeft.png</SelectSlideArrowLeft>
     <SelectSlideArrowRight>SelectSlideArrowRight.png</SelectSlideArrowRight>
@@ -427,4 +428,3 @@
     <IntroOut>IntroOut2.mp4</IntroOut>
   </Videos>
 </root>
-
