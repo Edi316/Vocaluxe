@@ -1,0 +1,99 @@
+name: 'Vocaluxe Custom Build FFmpeg'
+
+on:
+  push:
+    tags:
+      - '[0-9].[0-9].[0-9]'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-2025
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v5
+
+      - name: Setup MSBuild
+        uses: microsoft/setup-msbuild@v3
+        with:
+          vs-version: latest
+          msbuild-architecture: x64
+
+      - name: Setup NuGet
+        uses: NuGet/setup-nuget@v4
+
+      - name: Restore NuGet packages
+        run: nuget restore Vocaluxe.sln
+
+      - name: Build solution
+        env:
+          VOCALUXE_VERSION: ${{ github.ref_name }}
+        run: msbuild Vocaluxe.sln /p:Configuration=ReleaseWin /p:Platform="x64"
+
+      - name: Download theme videos
+        shell: pwsh
+        run: |
+          Invoke-WebRequest -Uri 'https://github.com/Vocaluxe/VocaluxeDependencies/raw/master/zips/themes/vocaluxe.themes.vocaluxe-2024.video-part1.zip' -OutFile 'vocaluxe.themes.vocaluxe-2024.video.zip'
+          7z x '-aoa' '-oOutput/' './vocaluxe.themes.vocaluxe-2024.video.zip'
+          Remove-Item './vocaluxe.themes.vocaluxe-2024.video.zip'
+
+      - name: Download FFmpeg and GStreamer libs
+        shell: pwsh
+        run: |
+          Invoke-WebRequest -Uri 'https://github.com/Edi316/libs/raw/libs.zip.001' -OutFile 'libs.zip.001'
+          Invoke-WebRequest -Uri 'https://github.com/Edi316/libs/raw/libs.zip.002' -OutFile 'libs.zip.002'
+          Invoke-WebRequest -Uri 'https://github.com/Edi316/libs/raw/libs.zip.003' -OutFile 'libs.zip.003'
+          Invoke-WebRequest -Uri 'https://github.com/Edi316/libs/raw/libs.zip.004' -OutFile 'libs.zip.004'
+          Invoke-WebRequest -Uri 'https://github.com/Edi316/libs/raw/libs.zip.005' -OutFile 'libs.zip.005'
+          Invoke-WebRequest -Uri 'https://github.com/Edi316/libs/raw/libs.zip.006' -OutFile 'libs.zip.006'
+          Invoke-WebRequest -Uri 'https://github.com/Edi316/libs/raw/libs.zip.007' -OutFile 'libs.zip.007'
+          7z x '-aoa' '-oOutput/' './libs.zip.001'
+          Remove-Item './libs.zip.00*'
+
+      - name: Run tests
+        shell: pwsh
+        run: |
+          nuget install NUnit.ConsoleRunner -Version 3.20.1 -OutputDirectory testrunner
+          .\testrunner\NUnit.ConsoleRunner.3.20.1\tools\nunit3-console.exe ".\Tests\bin\Release\Tests.dll" --result=".\TestResult.xml"
+
+      - name: Create release package name
+        id: package
+        shell: pwsh
+        run: |
+          $date = Get-Date -Format 'yyyyMMdd'
+          $filename = "Vocaluxe_CustomBuild_FFmpeg_$date.7z"
+          "filename=$filename" >> $env:GITHUB_OUTPUT
+
+      - name: Create 7Z package
+        shell: pwsh
+        run: |
+          7z a "${{ steps.package.outputs.filename }}" ".\Output\*"
+
+      - name: Upload release package artifact
+        uses: actions/upload-artifact@v6
+        with:
+          name: release-package
+          path: ${{ steps.package.outputs.filename }}
+          if-no-files-found: error
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download release package artifact
+        uses: actions/download-artifact@v7
+        with:
+          name: release-package
+          path: artifacts
+
+      - name: Create release
+        uses: softprops/action-gh-release@v3
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: Vocaluxe Custom Build FFmpeg
+          prerelease: false
+          target_commitish: ${{ github.sha }}
+          files: artifacts/*.7z
+          fail_on_unmatched_files: true
