@@ -50,13 +50,13 @@ jobs:
         shell: pwsh
         run: |
           $date = Get-Date -Format 'yyyyMMdd'
-          $filename = "Vocaluxe_CustomBuild_$date.zip"
+          $filename = "Vocaluxe_CustomBuild_$date.7z"
           "filename=$filename" >> $env:GITHUB_OUTPUT
 
-      - name: Create ZIP package
+      - name: Create 7Z package
         shell: pwsh
         run: |
-          7z a -tzip "${{ steps.package.outputs.filename }}" ".\Output\*"
+          7z a "${{ steps.package.outputs.filename }}" ".\Output\*"
 
       - name: Upload release package artifact
         uses: actions/upload-artifact@v6
@@ -82,5 +82,5 @@ jobs:
           name: Vocaluxe Custom Build
           prerelease: false
           target_commitish: ${{ github.sha }}
-          files: artifacts/*.zip
+          files: artifacts/*.7z
           fail_on_unmatched_files: true
