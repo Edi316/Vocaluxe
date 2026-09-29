@@ -42,13 +42,13 @@ jobs:
       - name: Download FFmpeg and GStreamer libs
         shell: pwsh
         run: |
-          Invoke-WebRequest -Uri 'https://github.com/Edi316/libs/raw/libs.zip.001' -OutFile 'libs.zip.001'
-          Invoke-WebRequest -Uri 'https://github.com/Edi316/libs/raw/libs.zip.002' -OutFile 'libs.zip.002'
-          Invoke-WebRequest -Uri 'https://github.com/Edi316/libs/raw/libs.zip.003' -OutFile 'libs.zip.003'
-          Invoke-WebRequest -Uri 'https://github.com/Edi316/libs/raw/libs.zip.004' -OutFile 'libs.zip.004'
-          Invoke-WebRequest -Uri 'https://github.com/Edi316/libs/raw/libs.zip.005' -OutFile 'libs.zip.005'
-          Invoke-WebRequest -Uri 'https://github.com/Edi316/libs/raw/libs.zip.006' -OutFile 'libs.zip.006'
-          Invoke-WebRequest -Uri 'https://github.com/Edi316/libs/raw/libs.zip.007' -OutFile 'libs.zip.007'
+          Invoke-WebRequest -Uri 'https://github.com/Edi316/Libs/raw/main/libs.zip.001' -OutFile 'libs.zip.001'
+          Invoke-WebRequest -Uri 'https://github.com/Edi316/Libs/raw/main/libs.zip.002' -OutFile 'libs.zip.002'
+          Invoke-WebRequest -Uri 'https://github.com/Edi316/Libs/raw/main/libs.zip.003' -OutFile 'libs.zip.003'
+          Invoke-WebRequest -Uri 'https://github.com/Edi316/Libs/raw/main/libs.zip.004' -OutFile 'libs.zip.004'
+          Invoke-WebRequest -Uri 'https://github.com/Edi316/Libs/raw/main/libs.zip.005' -OutFile 'libs.zip.005'
+          Invoke-WebRequest -Uri 'https://github.com/Edi316/Libs/raw/main/libs.zip.006' -OutFile 'libs.zip.006'
+          Invoke-WebRequest -Uri 'https://github.com/Edi316/Libs/raw/main/libs.zip.007' -OutFile 'libs.zip.007'
           7z x '-aoa' '-oOutput/' './libs.zip.001'
           Remove-Item './libs.zip.00*'
 
