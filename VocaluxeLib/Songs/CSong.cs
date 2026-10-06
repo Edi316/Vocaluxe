@@ -22,6 +22,8 @@ using System.Linq;
 using System.Text;
 using VocaluxeLib.Draw;
 using VocaluxeLib.Log;
+using VocaluxeLib.Songs.Sources;
+using VocaluxeLib.Utils.Player;
 
 namespace VocaluxeLib.Songs
 {
@@ -43,7 +45,7 @@ namespace VocaluxeLib.Songs
     {
         Title = 1,
         Artist = 2,
-        MP3 = 4,
+        AUDIO = 4,
         Instrumental = 5,
         Vocals = 6,
         Bpm = 8,
@@ -79,7 +81,7 @@ namespace VocaluxeLib.Songs
         public float StartTime;
     }
 
-    public partial class CSong
+    public partial class CSong : IEquatable<CSong>
     {
         private CTextureRef _CoverTextureSmall;
         private CTextureRef _CoverTextureBig;
@@ -308,34 +310,53 @@ namespace VocaluxeLib.Songs
             return writer.SaveFile(filePath);
         }
 
-        public string GetMP3()
+        public ISoundSource GetAudioSource()
         {
-            return Path.Combine(Folder, Audio);
+            return new CSongFileSource(this, Audio);
         }
 
-        public string GetInstrumental()
+        public ISoundSource GetInstrumentalSource()
         {
-            return Path.Combine(Folder, Instrumental);
+            return new CSongFileSource(this, Instrumental);
         }
 
-        public bool HasInstrumental()
+        public bool HasInstrumental => _FileExist(Instrumental);
+
+        public ISoundSource GetVocalsSource()
         {
-            return !string.IsNullOrEmpty(Instrumental);
+            return new CSongFileSource(this, Vocals);
         }
 
-        public string GetVocals()
+        public bool HasVocals => _FileExist(Vocals);
+
+        public bool HasVideo => _FileExist(Video);
+
+        private bool _FileExist(string fileName)
         {
-            return Path.Combine(Folder, Vocals);
+            return !string.IsNullOrEmpty(_GetFilePathIfExist(fileName));
         }
 
-        public bool HasVocals()
+        private string _GetFilePathIfExist(string fileName)
         {
-            return !string.IsNullOrEmpty(Vocals);
+            if (string.IsNullOrEmpty(Folder) || string.IsNullOrEmpty(fileName))
+            {
+                return null;
+            }
+
+            var filePath = Path.Combine(Folder, fileName);
+            return File.Exists(filePath) ? filePath : null;
         }
 
-        public string GetVideo()
+        public Stream GetVideoStream()
         {
-            return Path.Combine(Folder, Video);
+            var videoPath = _GetFilePathIfExist(Video);
+            if (!string.IsNullOrEmpty(videoPath))
+            {
+                return new FileStream(videoPath, FileMode.Open, FileAccess.Read);
+            }
+
+            CLog.Error($"Video file {videoPath} doesn't exist");
+            return null;
         }
 
         public void LoadSmallCover()
@@ -585,6 +606,46 @@ namespace VocaluxeLib.Songs
 
             ShortEnd.EndBeat = stop;
             ShortEnd.Source = EDataSource.Calculated;
+        }
+
+        public bool Equals(CSong other)
+        {
+            if (other is null)
+            {
+                return false;
+            }
+
+            if (ReferenceEquals(this, other))
+            {
+                return true;
+            }
+
+            return Id == other.Id;
+        }
+
+        public override bool Equals(object obj)
+        {
+            if (obj is null)
+            {
+                return false;
+            }
+
+            if (ReferenceEquals(this, obj))
+            {
+                return true;
+            }
+
+            if (obj.GetType() != GetType())
+            {
+                return false;
+            }
+
+            return Equals((CSong)obj);
+        }
+
+        public override int GetHashCode()
+        {
+            return Id;
         }
     }
 }
