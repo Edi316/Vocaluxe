@@ -18,7 +18,7 @@ if ($Env:VOCALUXE_VERSION) {
     $Version = "$Env:VOCALUXE_VERSION";
 }
 
-$fullVersionName = "Vocaluxe Custom Build $Version ($Arch)"
+$fullVersionName = "Vocaluxe Custom Build FFmpeg $Version ($Arch)"
 
 (Get-Content -Encoding UTF8 "$($ProjectDir)Properties\AssemblyInfo.cs") `
 | Foreach-Object {$_ `
