@@ -117,7 +117,7 @@ namespace Vocaluxe.Base
         {
             [XmlElement("Name"), DefaultValue("Tonix")]
             public string Theme;
-            [DefaultValue("Standard")]
+            [DefaultValue("Notes")]
             public string Skin;
             [XmlElement("Cover"), DefaultValue("Tonix")]
             public string CoverTheme;
