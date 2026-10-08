@@ -18,35 +18,22 @@
 using System;
 using System.Collections.Generic;
 using System.Threading;
-using SlimDX.DirectSound;
-using SlimDX.Multimedia;
+using NAudio.Wave;
 
 namespace Vocaluxe.Lib.Sound.Record.DirectSound
 {
     public class CSoundCardSource : IDisposable
     {
-        private volatile bool _Running;
-        private readonly int _BufferSize;
-        private CaptureBuffer _CaptureBuffer;
-        private CaptureBufferDescription _BufferDescription;
-        private DirectSoundCapture _CaptureDevice;
-        private readonly WaveFormat _WaveFormat;
-        private Thread _CaptureThread;
-        private List<NotificationPosition> _Notifications;
-        private int _BufferPortionCount;
-        private int _BufferPortionSize;
-        private WaitHandle[] _WaitHandles;
-        private double _SampleRate;
-        private readonly string _Guid;
+        private WaveInEvent _WaveIn;
+        private readonly string _Guid;      // enthält jetzt den Geräteindex
         private readonly short _Channels;
+        private double _SampleRate = 44.1;
+        private bool _Running;
 
         public CSoundCardSource(string guid, short channels)
         {
             _Guid = guid;
             _Channels = channels;
-            _WaveFormat = new WaveFormat();
-            SampleRateKhz = 44.1;
-            _BufferSize = 2048;
         }
 
         public event EventHandler<CSampleDataEventArgs> SampleDataReady = delegate { };
@@ -54,149 +41,55 @@ namespace Vocaluxe.Lib.Sound.Record.DirectSound
         public double SampleRateKhz
         {
             get { return _SampleRate; }
-
             set
             {
                 _SampleRate = value;
-
                 if (_Running)
-                {
                     Restart();
-                }
             }
         }
 
         public void Start()
         {
             if (_Running)
-            {
                 throw new InvalidOperationException();
-            }
 
-            if (_CaptureDevice == null)
+            _WaveIn = new WaveInEvent
             {
-                _CaptureDevice = new DirectSoundCapture(new Guid(_Guid));
-            }
-
-            _WaveFormat.FormatTag = WaveFormatTag.Pcm; // Change to WaveFormatTag.IeeeFloat for float
-            _WaveFormat.BitsPerSample = 16; // Set this to 32 for float
-            _WaveFormat.BlockAlignment = (short)(_Channels * (_WaveFormat.BitsPerSample / 8));
-            _WaveFormat.Channels = _Channels;
-            _WaveFormat.SamplesPerSecond = (int)(SampleRateKhz * 1000D);
-            _WaveFormat.AverageBytesPerSecond =
-                _WaveFormat.SamplesPerSecond *
-                _WaveFormat.BlockAlignment;
-
-            _BufferPortionCount = 2;
-
-            _BufferDescription.BufferBytes = _BufferSize * sizeof(short) * _BufferPortionCount * _Channels;
-            _BufferDescription.Format = _WaveFormat;
-            _BufferDescription.WaveMapped = false;
-
-            _CaptureBuffer = new CaptureBuffer(_CaptureDevice, _BufferDescription);
-
-            _BufferPortionSize = _CaptureBuffer.SizeInBytes / _BufferPortionCount;
-            _Notifications = new List<NotificationPosition>();
-
-            for (var i = 0; i < _BufferPortionCount; i++)
-            {
-                var notification = new NotificationPosition { Offset = _BufferPortionCount - 1 + _BufferPortionSize * i, Event = new AutoResetEvent(false) };
-                _Notifications.Add(notification);
-            }
-
-            _CaptureBuffer.SetNotificationPositions(_Notifications.ToArray());
-            _WaitHandles = new WaitHandle[_Notifications.Count];
-
-            for (var i = 0; i < _Notifications.Count; i++)
-            {
-                _WaitHandles[i] = _Notifications[i].Event;
-            }
-
-            _CaptureThread = new Thread(_DoCapture) { Name = "DirectSoundCapture", IsBackground = true };
-
+                DeviceNumber = int.Parse(_Guid),
+                WaveFormat = new WaveFormat((int)(SampleRateKhz * 1000D), 16, _Channels),
+                BufferMilliseconds = 46,   // ca. 2048 Samples bei 44,1 kHz
+                NumberOfBuffers = 2
+            };
+            _WaveIn.DataAvailable += _OnDataAvailable;
             _Running = true;
-            _CaptureThread.Start();
+            _WaveIn.StartRecording();
+        }
+
+        private void _OnDataAvailable(object sender, WaveInEventArgs e)
+        {
+            var data = new byte[e.BytesRecorded];
+            Buffer.BlockCopy(e.Buffer, 0, data, 0, e.BytesRecorded);
+            SampleDataReady(this, new CSampleDataEventArgs(data, _Guid));
         }
 
         public void Stop()
         {
             _Running = false;
-
-            if (_CaptureThread != null)
-            {
-                _CaptureThread.Join();
-                _CaptureThread = null;
-            }
-
-            if (_CaptureBuffer != null)
-            {
-                _CaptureBuffer.Dispose();
-                _CaptureBuffer = null;
-            }
-
-            if (_Notifications != null)
-            {
-                foreach (var notification in _Notifications)
-                {
-                    notification.Event.Close();
-                }
-
-                _Notifications.Clear();
-                _Notifications = null;
-            }
+            if (_WaveIn == null)
+                return;
+            _WaveIn.DataAvailable -= _OnDataAvailable;
+            _WaveIn.StopRecording();
+            _WaveIn.Dispose();
+            _WaveIn = null;
         }
 
-        public void Restart()
-        {
-            Stop();
-            Start();
-        }
-
-        private void _DoCapture()
-        {
-            var bufferPortionSamples = _BufferPortionSize / sizeof(byte);
-
-            // Buffer type must match this.waveFormat.FormatTag and this.waveFormat.BitsPerSample
-            var bufferPortion = new byte[bufferPortionSamples];
-
-            _CaptureBuffer.Start(true);
-
-            while (_Running)
-            {
-                var bufferPortionIndex = WaitHandle.WaitAny(_WaitHandles);
-
-                _CaptureBuffer.Read(
-                    bufferPortion,
-                    0,
-                    bufferPortionSamples,
-                    _BufferPortionSize * Math.Abs((bufferPortionIndex - 1) % _BufferPortionCount));
-
-                SampleDataReady(this, new CSampleDataEventArgs(bufferPortion, _Guid));
-            }
-
-            _CaptureBuffer.Stop();
-        }
+        public void Restart() { Stop(); Start(); }
 
         public void Dispose()
         {
-            Dispose(true);
+            Stop();
             GC.SuppressFinalize(this);
-        }
-
-        // ReSharper disable InconsistentNaming
-        protected void Dispose(bool disposing)
-            // ReSharper restore InconsistentNaming
-        {
-            if (disposing)
-            {
-                Stop();
-
-                if (_CaptureDevice != null)
-                {
-                    _CaptureDevice.Dispose();
-                    _CaptureDevice = null;
-                }
-            }
         }
     }
 }
