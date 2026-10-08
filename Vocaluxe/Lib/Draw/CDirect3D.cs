@@ -364,8 +364,8 @@ namespace Vocaluxe.Lib.Draw
 
             try
             {
-                _Device.SetTransform(TransformState.Projection, ref projection);
-                _Device.SetTransform(TransformState.World, ref translate);
+                _Device.SetTransform(TransformState.Projection, projection);
+                _Device.SetTransform(TransformState.World, translate);
             }
             catch (SharpDX.SharpDXException e)
             {
@@ -451,7 +451,7 @@ namespace Vocaluxe.Lib.Draw
                 for (var i = 0; i < _Vertices.Count; i += 4)
                 {
                     var world = _VerticesRotationMatrices.Dequeue();
-                    _Device.SetTransform(TransformState.World, ref world);
+                    _Device.SetTransform(TransformState.World, world);
                     _Device.SetTexture(0, _VerticesTextures.Dequeue());
                     _Device.DrawIndexedPrimitive(PrimitiveType.TriangleList, i, 0, 4, 0, 2);
                 }
