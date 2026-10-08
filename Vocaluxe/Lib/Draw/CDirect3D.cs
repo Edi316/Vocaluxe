@@ -22,26 +22,31 @@ using System.Drawing.Imaging;
 using System.IO;
 using System.Runtime.InteropServices;
 using System.Windows.Forms;
-using SlimDX;
-using SlimDX.Direct3D9;
-using SlimDX.Windows;
+using SharpDX.Direct3D9;
 using Vocaluxe.Base;
 using VocaluxeLib;
 using VocaluxeLib.Draw;
 using VocaluxeLib.Log;
+using Matrix = SharpDX.Matrix;
+using Vector2 = SharpDX.Vector2;
+using Vector3 = SharpDX.Vector3;
+using ColorBGRA = SharpDX.Mathematics.Interop.RawColorBGRA;
 
 namespace Vocaluxe.Lib.Draw
 {
-    class CRenderFormHook : RenderForm, IFormHook
+    class CRenderFormHook : Form, IFormHook
     {
+        public CRenderFormHook()
+        {
+            SetStyle(ControlStyles.AllPaintingInWmPaint | ControlStyles.Opaque | ControlStyles.UserPaint, true);
+        }
+
         public MessageEventHandler OnMessage { private get; set; }
 
         protected override void WndProc(ref Message m)
         {
             if (OnMessage == null || OnMessage(ref m))
-            {
                 base.WndProc(ref m);
-            }
         }
     }
 
@@ -49,10 +54,10 @@ namespace Vocaluxe.Lib.Draw
     {
         public readonly Texture D3DTexture;
 
-        public CD3DTexture(Device device, Size dataSize, int texWidth = 0, int texHeight = 0) : base(dataSize, new Size(texWidth, texHeight))
+        public CD3DTexture(Device device, Size dataSize, int texWidth = 0, int texHeight = 0)
+            : base(dataSize, new Size(texWidth, texHeight))
         {
-            //Create a new texture in the managed pool, which does not need to be recreated on a lost device
-            //because a copy of the texture is hold in the Ram
+            //Managed pool: keeps a copy in RAM, survives a lost device
             D3DTexture = device == null ? null : new Texture(device, texWidth, texHeight, 0, Usage.AutoGenerateMipMap, Format.A8R8G8B8, Pool.Managed);
         }
 
@@ -65,17 +70,16 @@ namespace Vocaluxe.Lib.Draw
         {
             base.Dispose();
             if (D3DTexture != null)
-            {
                 D3DTexture.Dispose();
-            }
         }
     }
 
     class CDirect3D : CDrawBaseWindows<CD3DTexture>, IDraw
     {
         private readonly Direct3D _D3D;
-        private readonly Device _Device;
-        private readonly PresentParameters _PresentParameters;
+        private Device _Device;
+        //PresentParameters ist in SharpDX ein struct -> nicht readonly
+        private PresentParameters _PresentParameters;
 
         private VertexBuffer _VertexBuffer;
         private IndexBuffer _IndexBuffer;
@@ -86,21 +90,17 @@ namespace Vocaluxe.Lib.Draw
         private readonly Queue<Texture> _VerticesTextures = new Queue<Texture>();
         private readonly Queue<Matrix> _VerticesRotationMatrices = new Queue<Matrix>();
 
-        /// <summary>
-        ///     Creates a new Instance of the CDirect3D Class
-        /// </summary>
+        private static bool _IsDeviceLost(SharpDX.SharpDXException e)
+        {
+            var code = e.ResultCode.Code;
+            return code == ResultCode.DeviceLost.Result.Code || code == ResultCode.DeviceNotReset.Result.Code;
+        }
+
         public CDirect3D()
         {
             _Form = new CRenderFormHook { ClientSize = new Size(CConfig.Config.Graphics.ScreenW * CConfig.Config.Graphics.NumScreens, CConfig.Config.Graphics.ScreenH) };
 
-            try
-            {
-                _D3D = new Direct3D();
-            }
-            catch (Direct3DX9NotFoundException e)
-            {
-                CLog.Error(e, "No DirectX runtimes were found, please download and install them from http://www.microsoft.com/download/en/details.aspx?id=8109");
-            }
+            _D3D = new Direct3D(); // nutzt nur d3d9.dll aus Windows, kein D3DX
 
             _Form.KeyDown += _OnKeyDown;
             _Form.PreviewKeyDown += _OnPreviewKeyDown;
@@ -114,60 +114,47 @@ namespace Vocaluxe.Lib.Draw
             _Form.MouseLeave += _OnMouseLeave;
             _Form.MouseEnter += _OnMouseEnter;
 
+            var adapter = _D3D.Adapters[0];
             _PresentParameters = new PresentParameters
             {
                 Windowed = true,
                 SwapEffect = SwapEffect.Discard,
+                DeviceWindowHandle = _Form.Handle,
                 BackBufferHeight = CConfig.Config.Graphics.ScreenH,
                 BackBufferWidth = CConfig.Config.Graphics.ScreenW * CConfig.Config.Graphics.NumScreens,
-                BackBufferFormat = _D3D.Adapters.DefaultAdapter.CurrentDisplayMode.Format,
-                Multisample = MultisampleType.None,
-                MultisampleQuality = 0
+                BackBufferFormat = adapter.CurrentDisplayMode.Format,
+                MultiSampleType = MultisampleType.None,
+                MultiSampleQuality = 0
             };
 
-            //Apply antialiasing and check if antialiasing mode is supported
-
             #region Antialiasing
-            int quality;
             MultisampleType msType;
             switch (CConfig.Config.Graphics.AAMode)
             {
-                case EAntiAliasingModes.X2:
-                    msType = MultisampleType.TwoSamples;
-                    break;
-                case EAntiAliasingModes.X4:
-                    msType = MultisampleType.FourSamples;
-                    break;
-                case EAntiAliasingModes.X8:
-                    msType = MultisampleType.EightSamples;
-                    break;
+                case EAntiAliasingModes.X2: msType = MultisampleType.TwoSamples; break;
+                case EAntiAliasingModes.X4: msType = MultisampleType.FourSamples; break;
+                case EAntiAliasingModes.X8: msType = MultisampleType.EightSamples; break;
                 case EAntiAliasingModes.X16:
                 case EAntiAliasingModes.X32: //x32 is not supported, fallback to x16
-                    msType = MultisampleType.SixteenSamples;
-                    break;
-                default:
-                    msType = MultisampleType.None;
-                    break;
+                    msType = MultisampleType.SixteenSamples; break;
+                default: msType = MultisampleType.None; break;
             }
 
-            if (
-                !_D3D.CheckDeviceMultisampleType(_D3D.Adapters.DefaultAdapter.Adapter, DeviceType.Hardware, _D3D.Adapters.DefaultAdapter.CurrentDisplayMode.Format, false, msType,
-                    out quality))
+            int quality;
+            if (!_D3D.CheckDeviceMultisampleType(0, DeviceType.Hardware, adapter.CurrentDisplayMode.Format, false, msType, out quality))
             {
                 CLog.Error("[Direct3D] This AAMode is not supported by this device or driver, fallback to no AA");
                 msType = MultisampleType.None;
                 quality = 1;
             }
-
-            _PresentParameters.Multisample = msType;
-            _PresentParameters.MultisampleQuality = quality - 1;
+            _PresentParameters.MultiSampleType = msType;
+            _PresentParameters.MultiSampleQuality = quality - 1;
             #endregion Antialiasing
 
-            //Apply the VSync configuration
             _PresentParameters.PresentationInterval = CConfig.Config.Graphics.VSync == EOffOn.TR_CONFIG_ON ? PresentInterval.Default : PresentInterval.Immediate;
 
             //GMA 950 graphics devices can only process vertices in software mode
-            var caps = _D3D.GetDeviceCaps(_D3D.Adapters.DefaultAdapter.Adapter, DeviceType.Hardware);
+            var caps = _D3D.GetDeviceCaps(0, DeviceType.Hardware);
             var flags = (caps.DeviceCaps & DeviceCaps.HWTransformAndLight) != 0 ? CreateFlags.HardwareVertexProcessing : CreateFlags.SoftwareVertexProcessing;
 
             //Check if Pow2 textures are needed
@@ -178,7 +165,7 @@ namespace Vocaluxe.Lib.Draw
 
             try
             {
-                _Device = new Device(_D3D, _D3D.Adapters.DefaultAdapter.Adapter, DeviceType.Hardware, _Form.Handle, flags, _PresentParameters);
+                _Device = new Device(_D3D, 0, DeviceType.Hardware, _Form.Handle, flags, _PresentParameters);
             }
             catch (Exception e)
             {
@@ -186,93 +173,66 @@ namespace Vocaluxe.Lib.Draw
             }
             finally
             {
-                if (_Device == null || _Device.Disposed)
-                {
-                    CLog.Fatal(
-                        "Something went wrong during device creating, please check if your DirectX redistributables and grafic card drivers are up to date. You can download the DirectX runtimes at http://www.microsoft.com/download/en/details.aspx?id=8109");
-                }
+                if (_Device == null || _Device.IsDisposed)
+                    CLog.Fatal("Something went wrong during device creating, please check if your graphics card drivers are up to date.");
             }
         }
 
         #region resize
-        /// <summary>
-        ///     Resizes the viewport
-        /// </summary>
         protected override void _DoResize()
         {
             // The window was minimized, so restore it to the last known size
             if (_Form.ClientSize.Width == 0 || _Form.ClientSize.Height == 0)
-            {
                 _Form.ClientSize = _SizeBeforeMinimize;
-            }
 
             if (_H == _Form.ClientSize.Height && _W == _Form.ClientSize.Width && CConfig.Config.Graphics.ScreenAlignment == _CurrentAlignment)
-            {
                 return;
-            }
 
             _CurrentAlignment = CConfig.Config.Graphics.ScreenAlignment;
             _H = _Form.ClientSize.Height;
             _W = _Form.ClientSize.Width;
 
             if (CConfig.Config.Graphics.Stretch != EOffOn.TR_CONFIG_ON)
-            {
                 _AdjustAspect(false);
-            }
 
-            //Apply the new sizes to the PresentParameters
             _PresentParameters.BackBufferWidth = _Form.ClientSize.Width;
             _PresentParameters.BackBufferHeight = _Form.ClientSize.Height;
             if (_Run)
             {
                 _ClearScreen();
-                //To set new PresentParameters the device has to be resetted
                 _Reset();
-                //All configurations got flushed due to Reset(), so apply them again
                 _InitDevice();
-                _Device.Viewport = new Viewport(_X, _Y, _W, _H);
+                var vp = _Device.Viewport;
+                vp.X = _X;
+                vp.Y = _Y;
+                vp.Width = _W;
+                vp.Height = _H;
+                _Device.Viewport = vp;
             }
-
-            //Store size so it can get restored after the window gets minimized
             _SizeBeforeMinimize = _Form.ClientSize;
         }
 
         // ReSharper disable RedundantOverridenMember
-        /// <summary>
-        ///     Triggers the Fullscreen mode
-        /// </summary>
         protected override void _EnterFullScreen()
         {
-            //This currently not using real fullscreen mode but a borderless window
-            //Real fullscreen could be gained setting _PresentParameters.Windowed = true
-            //And calling Reset() and Init() after
+            //Borderless window instead of real fullscreen
             base._EnterFullScreen();
         }
-
         // ReSharper restore RedundantOverridenMember
         #endregion resize
 
         #region main stuff
-        /// <summary>
-        ///     Inits the Device
-        /// </summary>
-        /// <returns>True if it succeeded else false</returns>
         public override bool Init()
         {
             if (!base.Init())
-            {
                 return false;
-            }
 
-            if (_Device.Disposed)
-            {
+            if (_Device == null || _Device.IsDisposed)
                 return false;
-            }
 
             _InitDevice();
 
-            //This creates a new white texture and adds it to the texture pool
-            //This texture is used for the DrawRect method
+            //White 1x1 texture used by DrawRect
             using (var blankMap = new Bitmap(1, 1))
             using (var g = Graphics.FromImage(blankMap))
             {
@@ -287,154 +247,108 @@ namespace Vocaluxe.Lib.Draw
         {
             _AdjustNewBorders();
 
-            _VertexBuffer = new VertexBuffer(_Device, CSettings.VertexBufferElements * 4 * Marshal.SizeOf(typeof(STexturedColoredVertex)), Usage.WriteOnly | Usage.Dynamic,
-                VertexFormat.Position | VertexFormat.Texture1 | VertexFormat.Diffuse, Pool.Default);
+            var stride = Marshal.SizeOf(typeof(STexturedColoredVertex));
+            _VertexBuffer = new VertexBuffer(_Device, CSettings.VertexBufferElements * 4 * stride, Usage.WriteOnly | Usage.Dynamic,
+                                             VertexFormat.Position | VertexFormat.Texture1 | VertexFormat.Diffuse, Pool.Default);
 
-            if (_Device.SetStreamSource(0, _VertexBuffer, 0, Marshal.SizeOf(typeof(STexturedColoredVertex))).IsFailure)
+            try
             {
-                CLog.Error("Failed to set stream source");
+                _Device.SetStreamSource(0, _VertexBuffer, 0, stride);
+                _Device.VertexDeclaration = STexturedColoredVertex.GetDeclaration(_Device);
+
+                _Device.SetRenderState(RenderState.CullMode, Cull.None);
+                _Device.SetRenderState(RenderState.AlphaBlendEnable, true);
+                _Device.SetRenderState(RenderState.Lighting, false);
+                _Device.SetRenderState(RenderState.DestinationBlend, Blend.InverseSourceAlpha);
+                _Device.SetRenderState(RenderState.SourceBlend, Blend.SourceAlpha);
+
+                if (_PresentParameters.MultiSampleType != MultisampleType.None)
+                    _Device.SetRenderState(RenderState.MultisampleAntialias, true);
+
+                _Device.SetSamplerState(0, SamplerState.MinFilter, TextureFilter.Linear);
+                _Device.SetSamplerState(0, SamplerState.MagFilter, TextureFilter.Linear);
+                _Device.SetSamplerState(0, SamplerState.MipFilter, TextureFilter.Linear);
+                _Device.SetSamplerState(0, SamplerState.AddressU, TextureAddress.Clamp);
+                _Device.SetSamplerState(0, SamplerState.AddressV, TextureAddress.Clamp);
+
+                _Device.SetTextureStageState(0, TextureStage.AlphaArg1, TextureArgument.Texture);
+                _Device.SetTextureStageState(0, TextureStage.AlphaArg2, TextureArgument.Diffuse);
+                _Device.SetTextureStageState(0, TextureStage.AlphaOperation, TextureOperation.Modulate);
+            }
+            catch (SharpDX.SharpDXException e)
+            {
+                CLog.Error(e, "Failed to set device states");
             }
 
-            _Device.VertexDeclaration = STexturedColoredVertex.GetDeclaration(_Device);
-
-            if (_Device.SetRenderState(RenderState.CullMode, Cull.None).IsFailure)
+            var indices = new short[] { 0, 1, 2, 0, 2, 3 };
+            _IndexBuffer = new IndexBuffer(_Device, 6 * sizeof(short), Usage.WriteOnly, Pool.Managed, true);
+            using (var stream = _IndexBuffer.Lock(0, 0, LockFlags.None))
             {
-                CLog.Error("Failed to set cull mode");
+                stream.WriteRange(indices);
             }
-
-            if (_Device.SetRenderState(RenderState.AlphaBlendEnable, true).IsFailure)
-            {
-                CLog.Error("Failed to enable alpha blending");
-            }
-
-            if (_Device.SetRenderState(RenderState.Lighting, false).IsFailure)
-            {
-                CLog.Error("Failed to disable lighting");
-            }
-
-            if (_Device.SetRenderState(RenderState.DestinationBlend, Blend.InverseSourceAlpha).IsFailure)
-            {
-                CLog.Error("Failed to set destination blend");
-            }
-
-            if (_Device.SetRenderState(RenderState.SourceBlend, Blend.SourceAlpha).IsFailure)
-            {
-                CLog.Error("Failed to set source blend");
-            }
-
-            if (_PresentParameters.Multisample != MultisampleType.None)
-            {
-                if (_Device.SetRenderState(RenderState.MultisampleAntialias, true).IsFailure)
-                {
-                    CLog.Error("Failed to set antialiasing");
-                }
-            }
-
-            if (_Device.SetSamplerState(0, SamplerState.MinFilter, TextureFilter.Linear).IsFailure)
-            {
-                CLog.Error("Failed to set min filter");
-            }
-
-            if (_Device.SetSamplerState(0, SamplerState.MagFilter, TextureFilter.Linear).IsFailure)
-            {
-                CLog.Error("Failed to set mag filter");
-            }
-
-            if (_Device.SetSamplerState(0, SamplerState.MipFilter, TextureFilter.Linear).IsFailure)
-            {
-                CLog.Error("Failed to set mip filter");
-            }
-
-            if (_Device.SetSamplerState(0, SamplerState.AddressU, TextureAddress.Clamp).IsFailure)
-            {
-                CLog.Error("Failed to set clamping on u");
-            }
-
-            if (_Device.SetSamplerState(0, SamplerState.AddressV, TextureAddress.Clamp).IsFailure)
-            {
-                CLog.Error("Failed to set claming on v");
-            }
-
-            if (_Device.SetTextureStageState(0, TextureStage.AlphaArg1, TextureArgument.Texture).IsFailure)
-            {
-                CLog.Error("Failed to set alpha argument 1");
-            }
-
-            if (_Device.SetTextureStageState(0, TextureStage.AlphaArg2, TextureArgument.Diffuse).IsFailure)
-            {
-                CLog.Error("Failed to set alpha argument 2");
-            }
-
-            if (_Device.SetTextureStageState(0, TextureStage.AlphaOperation, TextureOperation.Modulate).IsFailure)
-            {
-                CLog.Error("Failed to set alpha operation");
-            }
-
-            var indices = new Int16[6];
-            indices[0] = 0;
-            indices[1] = 1;
-            indices[2] = 2;
-            indices[3] = 0;
-            indices[4] = 2;
-            indices[5] = 3;
-
-            _IndexBuffer = new IndexBuffer(_Device, 6 * sizeof(Int16), Usage.WriteOnly, Pool.Managed, true);
-
-            var stream = _IndexBuffer.Lock(0, 0, LockFlags.Discard);
-            stream.WriteRange(indices);
             _IndexBuffer.Unlock();
             _Device.Indices = _IndexBuffer;
         }
 
         protected override void _OnBeforeDraw()
         {
-            if (_Device.BeginScene().IsFailure)
+            try
             {
-                CLog.Error("Failed to begin scene");
+                _Device.BeginScene();
+            }
+            catch (SharpDX.SharpDXException e)
+            {
+                if (!_IsDeviceLost(e))
+                    CLog.Error(e, "Failed to begin scene");
             }
         }
 
         protected override void _OnAfterDraw()
         {
             _RenderVertexBuffer();
-            if (_Device.EndScene().IsFailure)
+            try
             {
-                CLog.Error("Failed to end scene");
+                _Device.EndScene();
+            }
+            catch (SharpDX.SharpDXException e)
+            {
+                if (!_IsDeviceLost(e))
+                    CLog.Error(e, "Failed to end scene");
             }
 
             try
             {
-                //Now push the frame to the Viewport
                 _Device.Present();
             }
-            catch (Direct3D9Exception)
+            catch (SharpDX.SharpDXException)
             {
-                //In Direct3D devices can get lost. 
-                //This happens for example when opening the Task Manager in Vista/Windows 7 or if a UAC message is opening
-                //We need to reset the device to get it to workable state again
-                //After a reset Init() needs to be called because all data in the Direct3D default pool are lost and need to be recreated
-                if (_Device.TestCooperativeLevel() == ResultCode.DeviceNotReset)
+                //Devices can get lost (Task Manager, UAC, ...). Reset and recreate default-pool objects.
+                if (_Device.TestCooperativeLevel().Code == ResultCode.DeviceNotReset.Result.Code)
                 {
                     _Reset();
                     _InitDevice();
                 }
             }
-
             Application.DoEvents();
         }
 
         /// <summary>
-        ///     Resets the device, all objects in the Direct3D default pool get flushed and need to be recreated
+        /// Resets the device, all objects in the Direct3D default pool get flushed and need to be recreated
         /// </summary>
         private void _Reset()
         {
-            //Dispose all objects in the default pool, those need to be recreated
-            STexturedColoredVertex.GetDeclaration(_Device).Dispose();
-            _VertexBuffer.Dispose();
-            _IndexBuffer.Dispose();
-            if (_Device.Reset(_PresentParameters).IsFailure)
+            STexturedColoredVertex.DisposeDeclaration();
+            if (_VertexBuffer != null)
+                _VertexBuffer.Dispose();
+            if (_IndexBuffer != null)
+                _IndexBuffer.Dispose();
+            try
             {
-                CLog.Error("Failed to reset the device");
+                _Device.Reset(_PresentParameters);
+            }
+            catch (SharpDX.SharpDXException e)
+            {
+                CLog.Error(e, "Failed to reset the device");
             }
         }
 
@@ -448,21 +362,17 @@ namespace Vocaluxe.Lib.Draw
                 -dy - _BorderBottom, dy + _BorderTop,
                 CSettings.ZNear, CSettings.ZFar);
 
-            if (_Device.SetTransform(TransformState.Projection, projection).IsFailure)
+            try
             {
-                CLog.Error("Failed to set orthogonal matrix");
+                _Device.SetTransform(TransformState.Projection, ref projection);
+                _Device.SetTransform(TransformState.World, ref translate);
             }
-
-            if (_Device.SetTransform(TransformState.World, translate).IsFailure)
+            catch (SharpDX.SharpDXException e)
             {
-                CLog.Error("Failed to set translation matrix");
+                CLog.Error(e, "Failed to set transformation matrices");
             }
         }
 
-        /// <summary>
-        ///     Unloads all Textures and other objects used by Direct3D for rendering
-        /// </summary>
-        /// <returns></returns>
         public override void Close()
         {
             base.Close();
@@ -473,34 +383,19 @@ namespace Vocaluxe.Lib.Draw
             _D3D.Dispose();
         }
 
-        /// <summary>
-        ///     Gets the current viewport width
-        /// </summary>
-        /// <returns>The current viewport width</returns>
         public int GetScreenWidth()
         {
             return _Device.Viewport.Width;
         }
 
-        /// <summary>
-        ///     Gets the current viewport height
-        /// </summary>
-        /// <returns>The current viewport height</returns>
         public int GetScreenHeight()
         {
             return _Device.Viewport.Height;
         }
 
-        /// <summary>
-        ///     Adds a texture to the vertext buffer
-        /// </summary>
-        /// <param name="texture">Texture to draw</param>
-        /// <param name="dc">Coordinates to draw on</param>
-        /// <param name="color">Color to use</param>
-        /// <param name="isReflection">If true, then color is faded out in y direction</param>
         protected override void _DrawTexture(CD3DTexture texture, SDrawCoords dc, SColorF color, bool isReflection = false)
         {
-            //Align the pixels because Direct3D expects the pixels to be the left top corner
+            //Direct3D9 expects pixel centers at the top left corner
             dc.Wx1 -= 0.5f;
             dc.Wy1 -= 0.5f;
             dc.Wx2 -= 0.5f;
@@ -515,9 +410,7 @@ namespace Vocaluxe.Lib.Draw
                 c2 = color.AsColor().ToArgb();
             }
             else
-            {
                 c2 = c;
-            }
 
             var vert = new STexturedColoredVertex[4];
             vert[0] = new STexturedColoredVertex(new Vector3(dc.Wx1, -dc.Wy1, dc.Wz), new Vector2(dc.Tx1, dc.Ty1), c);
@@ -527,19 +420,11 @@ namespace Vocaluxe.Lib.Draw
             _AddToVertexBuffer(vert, texture.D3DTexture, _CalculateRotationMatrix(dc.Rotation, dc.Wx1, dc.Wx2, dc.Wy1, dc.Wy2));
         }
 
-        /// <summary>
-        ///     Adds a quad a list which will be added and rendered to the vertexbuffer when calling RenderToVertexBuffer to reduce vertexbuffer calls each frame to a minimum
-        /// </summary>
-        /// <param name="vertices">A TexturedColoredVertex array containg 4 vertices</param>
-        /// <param name="tex">The texture the vertex should be textured with</param>
-        /// <param name="rotation">The vertices' rotation</param>
         private void _AddToVertexBuffer(STexturedColoredVertex[] vertices, Texture tex, Matrix rotation)
         {
-            //The vertexbuffer is full, so we need to flush it before we can continue
+            //The vertexbuffer is full, so flush it first
             if (_Vertices.Count >= CSettings.VertexBufferElements)
-            {
                 _RenderVertexBuffer();
-            }
 
             _Vertices.Enqueue(vertices[0]);
             _Vertices.Enqueue(vertices[1]);
@@ -549,80 +434,95 @@ namespace Vocaluxe.Lib.Draw
             _VerticesRotationMatrices.Enqueue(rotation);
         }
 
-        /// <summary>
-        ///     Renders the vertex buffer
-        /// </summary>
         private void _RenderVertexBuffer()
         {
             if (_Vertices.Count <= 0)
-            {
                 return;
-            }
 
-            //The vertex buffer locks are slow actions, its better to lock once per frame and write all vertices to the buffer at once
-            var stream = _VertexBuffer.Lock(0, _Vertices.Count * Marshal.SizeOf(typeof(STexturedColoredVertex)), LockFlags.Discard);
-            stream.WriteRange(_Vertices.ToArray());
-            _VertexBuffer.Unlock();
-            stream.Dispose();
-
-            for (var i = 0; i < _Vertices.Count; i += 4)
+            try
             {
-                //Apply rotation
-                if (_Device.SetTransform(TransformState.World, _VerticesRotationMatrices.Dequeue()).IsFailure)
+                //Lock once per frame and write all vertices at once
+                using (var stream = _VertexBuffer.Lock(0, _Vertices.Count * Marshal.SizeOf(typeof(STexturedColoredVertex)), LockFlags.Discard))
                 {
-                    CLog.Error("Failed to set world transformation");
+                    stream.WriteRange(_Vertices.ToArray());
                 }
+                _VertexBuffer.Unlock();
 
-                //Apply texture
-                if (_Device.SetTexture(0, _VerticesTextures.Dequeue()).IsFailure)
+                for (var i = 0; i < _Vertices.Count; i += 4)
                 {
-                    CLog.Error("Failed to set texture");
-                }
-
-                //Draw 2 triangles from vertexbuffer
-                if (_Device.DrawIndexedPrimitives(PrimitiveType.TriangleList, i, 0, 4, 0, 2).IsFailure)
-                {
-                    CLog.Error("Failed to draw quad");
+                    var world = _VerticesRotationMatrices.Dequeue();
+                    _Device.SetTransform(TransformState.World, ref world);
+                    _Device.SetTexture(0, _VerticesTextures.Dequeue());
+                    _Device.DrawIndexedPrimitive(PrimitiveType.TriangleList, i, 0, 4, 0, 2);
                 }
             }
-
-            //Clear the queues for the next frame
-            _Vertices.Clear();
-            _VerticesTextures.Clear();
-            _VerticesRotationMatrices.Clear();
+            catch (SharpDX.SharpDXException e)
+            {
+                if (!_IsDeviceLost(e))
+                    CLog.Error(e, "Failed to draw quads");
+            }
+            finally
+            {
+                _Vertices.Clear();
+                _VerticesTextures.Clear();
+                _VerticesRotationMatrices.Clear();
+            }
         }
         #endregion main stuff
 
-        /// <summary>
-        ///     Removes all textures from the screen
-        /// </summary>
         protected override void _ClearScreen()
         {
-            if (_Device.Clear(ClearFlags.Target | ClearFlags.ZBuffer, Color.Black, 1.0f, 0).IsFailure)
+            try
             {
-                CLog.Error("Failed to clear the backbuffer");
+                //Nur Target: es gibt keinen Depth-Buffer (EnableAutoDepthStencil ist aus)
+                _Device.Clear(ClearFlags.Target, new ColorBGRA { B = 0, G = 0, R = 0, A = 255 }, 1.0f, 0);
+            }
+            catch (SharpDX.SharpDXException e)
+            {
+                if (!_IsDeviceLost(e))
+                    CLog.Error(e, "Failed to clear the backbuffer");
             }
         }
 
+        #region screen capture (ohne D3DX)
         /// <summary>
-        ///     Copies the current frame into a texture
-        ///     <returns>A texture holding the current frame</returns>
+        /// Reads the backbuffer into a BGRA byte array (alpha = 255). Works with multisampled backbuffers.
         /// </summary>
-        public CTextureRef CopyScreen()
+        private byte[] _GrabBackBuffer(int cropW, int cropH, out int w, out int h)
         {
-            var tex = _CreateTexture(new Size(_W, _H));
-            var backbufferSurface = _Device.GetBackBuffer(0, 0);
-            var textureSurface = tex.D3DTexture.GetSurfaceLevel(0);
-            Surface.FromSurface(textureSurface, backbufferSurface, Filter.Default, 0, new Rectangle(0, 0, _W, _H), new Rectangle(0, 0, _W, _H));
-            backbufferSurface.Dispose();
+            var fullW = _PresentParameters.BackBufferWidth;
+            var fullH = _PresentParameters.BackBufferHeight;
+            var format = _PresentParameters.BackBufferFormat;
+            w = cropW > 0 ? Math.Min(cropW, fullW) : fullW;
+            h = cropH > 0 ? Math.Min(cropH, fullH) : fullH;
 
-            return _GetTextureReference(_W, _H, tex);
+            var data = new byte[w * h * 4];
+            using (var back = _Device.GetBackBuffer(0, 0))
+            using (var rt = Surface.CreateRenderTarget(_Device, fullW, fullH, format, MultisampleType.None, 0, false))
+            using (var sys = Surface.CreateOffscreenPlain(_Device, fullW, fullH, format, Pool.SystemMemory))
+            {
+                _Device.StretchRectangle(back, rt, TextureFilter.None); //resolves multisampling
+                _Device.GetRenderTargetData(rt, sys);
+
+                var rect = sys.LockRectangle(LockFlags.ReadOnly);
+                for (var y = 0; y < h; y++)
+                    Marshal.Copy(rect.DataPointer + y * rect.Pitch, data, y * w * 4, w * 4);
+                sys.UnlockRectangle();
+            }
+            for (var i = 3; i < data.Length; i += 4)
+                data[i] = 255;
+            return data;
         }
 
-        /// <summary>
-        ///     Copies the current frame into a texture
-        /// </summary>
-        /// <param name="textureRef">The texture in which the frame is copied to</param>
+        public CTextureRef CopyScreen()
+        {
+            int w, h;
+            var data = _GrabBackBuffer(_W, _H, out w, out h);
+            var tex = _CreateTexture(new Size(w, h));
+            _WriteDataToTexture(tex, data);
+            return _GetTextureReference(w, h, tex);
+        }
+
         public void CopyScreen(ref CTextureRef textureRef)
         {
             CD3DTexture texture;
@@ -633,46 +533,33 @@ namespace Vocaluxe.Lib.Draw
             }
             else
             {
-                var backbufferSurface = _Device.GetBackBuffer(0, 0);
-                var textureSurface = texture.D3DTexture.GetSurfaceLevel(0);
-                Surface.FromSurface(textureSurface, backbufferSurface, Filter.Default, 0);
-                backbufferSurface.Dispose();
+                int w, h;
+                var data = _GrabBackBuffer(texture.DataSize.Width, texture.DataSize.Height, out w, out h);
+                _WriteDataToTexture(texture, data);
             }
         }
 
-        /// <summary>
-        ///     Creates a Screenshot of the current frame
-        /// </summary>
         public void MakeScreenShot()
         {
             var file = CHelper.GetUniqueFileName(Path.Combine(CSettings.DataFolder, CSettings.FolderNameScreenshots), "Screenshot.png");
 
-            //create a surface of the frame
-            using (var surface = _Device.GetBackBuffer(0, 0))
+            int w, h;
+            var data = _GrabBackBuffer(0, 0, out w, out h);
+            using (var bmp = new Bitmap(w, h, PixelFormat.Format32bppArgb))
             {
-                var screen = new Bitmap(Surface.ToStream(surface, ImageFileFormat.Png));
-                screen.Save(file, ImageFormat.Png);
-                screen.Dispose();
+                var bd = bmp.LockBits(new Rectangle(0, 0, w, h), ImageLockMode.WriteOnly, PixelFormat.Format32bppArgb);
+                Marshal.Copy(data, 0, bd.Scan0, data.Length);
+                bmp.UnlockBits(bd);
+                bmp.Save(file, ImageFormat.Png);
             }
         }
+        #endregion
 
-        /// <summary>
-        ///     Draws a colored rectangle
-        /// </summary>
-        /// <param name="color">The color in which the rectangle will be drawn in</param>
-        /// <param name="rect">The coordinates in a SRectF struct</param>
         public void DrawRect(SColorF color, SRectF rect, bool allMonitors = true)
         {
             DrawTexture(_BlankTexture, rect, color, false, allMonitors);
         }
 
-        /// <summary>
-        ///     Draws reflection of a colored rectangle
-        /// </summary>
-        /// <param name="color">The color in which the rectangle will be drawn in</param>
-        /// <param name="rect">The coordinates in a SRectF struct</param>
-        /// <param name="space">The space between the texture and the reflection</param>
-        /// <param name="height">The height of the reflection</param>
         public void DrawRectReflection(SColorF color, SRectF rect, float space, float height)
         {
             DrawTextureReflection(_BlankTexture, rect, color, rect, space, height);
@@ -681,32 +568,16 @@ namespace Vocaluxe.Lib.Draw
         protected override CD3DTexture _CreateTexture(Size dataSize)
         {
             if (dataSize.Width < 0)
-            {
                 return new CD3DTexture(null, dataSize);
-            }
-
             return new CD3DTexture(_Device, dataSize, _CheckForNextPowerOf2(dataSize.Width), _CheckForNextPowerOf2(dataSize.Height));
         }
 
         protected override void _WriteDataToTexture(CD3DTexture texture, byte[] data)
         {
-            //Lock the texture and fill it with the data
             var rect = texture.D3DTexture.LockRectangle(0, LockFlags.Discard);
             var rowWidth = 4 * texture.DataSize.Width;
-            if (rowWidth == rect.Pitch)
-            {
-                rect.Data.Write(data, 0, data.Length);
-            }
-            else
-            {
-                for (var i = 0; i + rowWidth <= data.Length; i += rowWidth)
-                {
-                    rect.Data.Write(data, i, rowWidth);
-                    //Go to next row
-                    rect.Data.Position = rect.Data.Position - rowWidth + rect.Pitch;
-                }
-            }
-
+            for (int row = 0, i = 0; i + rowWidth <= data.Length; i += rowWidth, row++)
+                Marshal.Copy(data, i, rect.DataPointer + row * rect.Pitch, rowWidth);
             texture.D3DTexture.UnlockRectangle(0);
         }
 
@@ -723,17 +594,13 @@ namespace Vocaluxe.Lib.Draw
                 var rotationMat = Matrix.RotationZ(-rotation);
                 var translationB = Matrix.Translation(centerX, centerY, 0);
 
-                //Multiplicate the matrices to get the real world matrix,
-                //First shift the texture into the center
-                //Rotate it and shift it back to the origin position
-                //Apply the originTranslation after
-                var result = translationA * rotationMat * translationB * originTranslation;
-                return result;
+                //Shift to center, rotate, shift back, then apply originTranslation
+                return translationA * rotationMat * translationB * originTranslation;
             }
-
             return originTranslation;
         }
 
+        [StructLayout(LayoutKind.Sequential)]
         private struct STexturedColoredVertex
         {
             private static VertexDeclaration _Declaration;
@@ -760,21 +627,16 @@ namespace Vocaluxe.Lib.Draw
 
             public static VertexDeclaration GetDeclaration(Device device)
             {
-                if (_Declaration == null || _Declaration.Disposed)
-                {
+                if (_Declaration == null || _Declaration.IsDisposed)
                     _Declaration = new VertexDeclaration(device, _Elements);
-                }
-
                 return _Declaration;
             }
 
             public static void DisposeDeclaration()
             {
-                if (_Declaration != null && !_Declaration.Disposed)
-                {
+                if (_Declaration != null && !_Declaration.IsDisposed)
                     _Declaration.Dispose();
-                    _Declaration = null;
-                }
+                _Declaration = null;
             }
         }
     }
