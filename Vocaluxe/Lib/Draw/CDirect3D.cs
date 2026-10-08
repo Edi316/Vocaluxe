@@ -574,7 +574,7 @@ namespace Vocaluxe.Lib.Draw
 
         protected override void _WriteDataToTexture(CD3DTexture texture, byte[] data)
         {
-            var rect = texture.D3DTexture.LockRectangle(0, LockFlags.Discard);
+            var rect = texture.D3DTexture.LockRectangle(0, LockFlags.None);
             var rowWidth = 4 * texture.DataSize.Width;
             for (int row = 0, i = 0; i + rowWidth <= data.Length; i += rowWidth, row++)
                 Marshal.Copy(data, i, rect.DataPointer + row * rect.Pitch, rowWidth);
