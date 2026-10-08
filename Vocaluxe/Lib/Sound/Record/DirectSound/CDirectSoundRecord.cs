@@ -17,7 +17,7 @@
 
 using System.Collections.Generic;
 using System.Linq;
-using SlimDX.DirectSound;
+using NAudio.Wave;
 
 namespace Vocaluxe.Lib.Sound.Record.DirectSound
 {
@@ -36,18 +36,11 @@ namespace Vocaluxe.Lib.Sound.Record.DirectSound
 
             _Sources = new List<CSoundCardSource>();
 
-            var devices = DirectSoundCapture.GetDevices();
-
-            foreach (var dev in devices)
+            for (int i = 0; i < WaveInEvent.DeviceCount; i++)
             {
-                using (var ds = new DirectSoundCapture(dev.DriverGuid))
-                {
-                    var device = new CRecordDevice(_Devices.Count, dev.Description, dev.DriverGuid.ToString(), ds.Capabilities.Channels);
-
-                    _Devices.Add(device);
-                }
+                var caps = WaveInEvent.GetCapabilities(i);
+                _Devices.Add(new CRecordDevice(_Devices.Count, caps.ProductName, i.ToString(), caps.Channels));
             }
-
             _Initialized = true;
 
             return true;
