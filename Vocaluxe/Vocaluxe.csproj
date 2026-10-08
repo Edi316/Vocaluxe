@@ -198,7 +198,8 @@
     <PackageReference Include="vocaluxe.dependencies.opentk" Version="1.0.1" />
     <PackageReference Include="vocaluxe.dependencies.portaudiosharp" Version="1.0.3" />
     <PackageReference Include="vocaluxe.dependencies.qrcoder" Version="1.0.1" />
-    <PackageReference Include="vocaluxe.dependencies.slimdx" Version="1.0.1" />
+    <PackageReference Include="SharpDX.Direct3D9" Version="4.2.0" />
+    <PackageReference Include="NAudio" Version="2.2.1" />
   </ItemGroup>
   <ItemGroup>
     <Compile Include="Base\CBackgroundMusic.cs" />
