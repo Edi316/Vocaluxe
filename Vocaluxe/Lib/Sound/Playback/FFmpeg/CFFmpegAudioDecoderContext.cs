@@ -1,23 +1,30 @@
-﻿using FFmpeg.AutoGen;
-using Vocaluxe.Base;
+using FFmpeg.AutoGen;
 using Vocaluxe.Lib.FFmpeg;
-using VocaluxeLib;
 using VocaluxeLib.Log;
 
 namespace Vocaluxe.Lib.Sound.Playback.FFmpeg
 {
     internal sealed unsafe class CFFmpegAudioDecoderContext : CFFmpegDecoderContextBase
     {
+        // Output is always packed (interleaved) signed 16 bit:
+        // - PortAudio has an issue (fixed only on master, never released) with buffers limited to 16 bits
+        //   https://github.com/PortAudio/portaudio/pull/774
+        // - Consumers do not get any information about the sample format, they expect interleaved 16 bit data
+        // - A packed format has exactly one data plane, so a single byte* is a valid output buffer
+        private const AVSampleFormat _OutputFormat = AVSampleFormat.AV_SAMPLE_FMT_S16;
+
         private SwrContext* _SwrContext;
         private byte* _Buffer;
-        private int _BufferLineSize;
+        private int _BufferCapacitySamples;
         private AVChannelLayout* _ChannelLayout;
-        private AVSampleFormat _OutputFormat;
 
         public int SamplesRate { get; private set; }
 
         public int ChannelCount => _ChannelLayout != null ? _ChannelLayout->nb_channels : 0;
 
+        /// <summary>
+        /// Number of valid bytes in <see cref="Buffer"/> for the last decoded frame
+        /// </summary>
         public int BufferSize { get; private set; }
 
         public byte* Buffer => _Buffer;
@@ -28,91 +35,126 @@ namespace Vocaluxe.Lib.Sound.Playback.FFmpeg
         {
             SamplesRate = codecContext->sample_rate;
             _ChannelLayout = &codecContext->ch_layout;
+            BufferSize = 0;
 
-            // If we use port audio, there is an issue fixed only on the master branch and never released regarding buffer size limited to 16bits
-            // To make songs compatible, let's resampling them to 16bits
-            // https://github.com/PortAudio/portaudio/pull/774
-            _OutputFormat = codecContext->sample_fmt;
-            if (CConfig.Config.Sound.PlayBackLib == EPlaybackLib.PortAudio && !_Is16BitsFormat(codecContext->sample_fmt))
+            if (ChannelCount <= 0)
             {
-                _OutputFormat = AVSampleFormat.AV_SAMPLE_FMT_S16;
-                fixed (SwrContext** swrContext = &_SwrContext)
-                {
-                    if (ffmpeg.swr_alloc_set_opts2(swrContext,
-                            _ChannelLayout,
-                            _OutputFormat,
-                            SamplesRate,
-                            _ChannelLayout,
-                            codecContext->sample_fmt,
-                            SamplesRate,
-                            0, null) < 0)
-                    {
-                        CLog.Error("Could not allocate resampler context");
-                        return false;
-                    }
-                }
+                CLog.Error("Invalid channel count");
+                return false;
+            }
 
-                if (ffmpeg.swr_init(_SwrContext) < 0)
+            // Only skip the resampler if the decoder already outputs exactly what we need.
+            // Planar formats (e.g. FLTP for MP3/AAC, S16P) always have to be converted.
+            if (codecContext->sample_fmt == _OutputFormat)
+            {
+                return true;
+            }
+
+            fixed (SwrContext** swrContext = &_SwrContext)
+            {
+                if (ffmpeg.swr_alloc_set_opts2(swrContext,
+                        _ChannelLayout,
+                        _OutputFormat,
+                        SamplesRate,
+                        _ChannelLayout,
+                        codecContext->sample_fmt,
+                        SamplesRate,
+                        0, null) < 0)
                 {
-                    CLog.Error("Could not init resampler");
+                    CLog.Error("Could not allocate resampler context");
                     return false;
                 }
             }
-            
-            fixed (byte** buffer = &_Buffer)
-            fixed (int* bufferLineSize = &_BufferLineSize)
-            {
-                BufferSize =
-                    ffmpeg.av_samples_alloc(buffer, bufferLineSize, _ChannelLayout->nb_channels, codecContext->frame_size, _OutputFormat, 1);
-            }
 
-            if (BufferSize < 0)
+            if (ffmpeg.swr_init(_SwrContext) < 0)
             {
-                CLog.Error("Unable to allocate the output buffer");
+                CLog.Error("Could not init resampler");
                 return false;
             }
+
             return true;
         }
 
-        private static bool _Is16BitsFormat(AVSampleFormat sampleFormat)
+        /// <summary>
+        /// Makes sure the output buffer can hold at least <paramref name="samples"/> samples per channel.
+        /// The frame size is not fixed (codecContext->frame_size may be 0, e.g. for PCM, and frames may vary in size),
+        /// so the buffer grows on demand.
+        /// </summary>
+        private bool _EnsureBufferCapacity(int samples)
         {
-            return sampleFormat is AVSampleFormat.AV_SAMPLE_FMT_S16 or AVSampleFormat.AV_SAMPLE_FMT_S16P;
+            if (_Buffer != null && samples <= _BufferCapacitySamples)
+            {
+                return true;
+            }
+
+            _FreeBuffer();
+
+            int lineSize;
+            fixed (byte** buffer = &_Buffer)
+            {
+                if (ffmpeg.av_samples_alloc(buffer, &lineSize, ChannelCount, samples, _OutputFormat, 1) < 0)
+                {
+                    CLog.Error("Unable to allocate the output buffer");
+                    return false;
+                }
+            }
+
+            _BufferCapacitySamples = samples;
+            return true;
         }
 
         protected override bool _ProcessFrame(AVFrame* frame)
         {
-            fixed (byte** buffer = &_Buffer)
+            BufferSize = 0;
+            int samples = frame->nb_samples;
+
+            if (_SwrContext != null)
             {
-                if (_SwrContext != null)
+                int maxOutSamples = ffmpeg.swr_get_out_samples(_SwrContext, frame->nb_samples);
+                if (maxOutSamples < 0 || !_EnsureBufferCapacity(maxOutSamples))
                 {
-                    if (ffmpeg.swr_convert(_SwrContext, buffer, frame->nb_samples, (byte**)&frame->data, frame->nb_samples) < 0)
-                    {
-                        return false;
-                    }
+                    return false;
                 }
-                else
+
+                fixed (byte** buffer = &_Buffer)
                 {
-					// Since this part is only an optimisation for OpenAL, I didn't take time to test it locally (because of a lot missing configurations)
-					// If there is an issue, should only be related to the way buffer are copied between linear and non linear buffers (just another method to use)
-                    if (ffmpeg.av_samples_copy(buffer, (byte**)&frame->data, 0, 0, frame->nb_samples, _ChannelLayout->nb_channels, _OutputFormat) < 0)
+                    samples = ffmpeg.swr_convert(_SwrContext, buffer, maxOutSamples, frame->extended_data, frame->nb_samples);
+                }
+
+                if (samples < 0)
+                {
+                    return false;
+                }
+            }
+            else
+            {
+                if (!_EnsureBufferCapacity(samples))
+                {
+                    return false;
+                }
+
+                fixed (byte** buffer = &_Buffer)
+                {
+                    if (ffmpeg.av_samples_copy(buffer, frame->extended_data, 0, 0, samples, ChannelCount, _OutputFormat) < 0)
                     {
                         return false;
                     }
                 }
             }
+
+            // Use the real amount of data of this frame, not the buffer capacity (last frame is usually shorter)
+            int size = ffmpeg.av_samples_get_buffer_size(null, ChannelCount, samples, _OutputFormat, 1);
+            if (size < 0)
+            {
+                return false;
+            }
+
+            BufferSize = size;
             return true;
         }
 
-        protected override void _InternalFree()
+        private void _FreeBuffer()
         {
-            if (_SwrContext != null)
-            {
-                fixed (SwrContext** swrContext = &_SwrContext)
-                {
-                    ffmpeg.swr_free(swrContext);
-                }
-            }
-
             if (_Buffer != null)
             {
                 fixed (byte** buffer = &_Buffer)
@@ -121,6 +163,18 @@ namespace Vocaluxe.Lib.Sound.Playback.FFmpeg
                 }
             }
 
+            _BufferCapacitySamples = 0;
+            BufferSize = 0;
+        }
+
+        protected override void _InternalFree()
+        {
+            fixed (SwrContext** swrContext = &_SwrContext)
+            {
+                ffmpeg.swr_free(swrContext);
+            }
+
+            _FreeBuffer();
             _ChannelLayout = null;
         }
     }
