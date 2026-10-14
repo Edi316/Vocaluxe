@@ -1,6 +1,7 @@
 using FFmpeg.AutoGen;
 using System;
 using System.IO;
+using System.Runtime.InteropServices;
 using VocaluxeLib.Log;
 
 namespace Vocaluxe.Lib.FFmpeg
@@ -9,6 +10,8 @@ namespace Vocaluxe.Lib.FFmpeg
     {
         private bool _Initialized;
         private Stream _SourceStream;
+        private readonly object _SourceLock = new();
+        private byte[] _ReadBuffer;
 
         private avio_alloc_context_read_packet _ReadSourceStreamCallback;
         private avio_alloc_context_seek _SeekSourceStreamCallback;
@@ -16,14 +19,17 @@ namespace Vocaluxe.Lib.FFmpeg
         private AVFormatContext* _FormatContext;
         private AVCodecContext* _CodecContext;
         private AVStream* _AvStream;
+        private AVPacket* _Packet;
+        private AVFrame* _Frame;
+
+        private bool _Draining;
+        private int _DecodeErrorCount;
 
         protected abstract AVMediaType _MediaType { get; }
 
-        public TimeSpan Duration => _AvStream == null ? TimeSpan.Zero :
-            TimeSpan.FromMilliseconds(ffmpeg.av_rescale_q(_AvStream->duration, _AvStream->time_base, new AVRational { num = 1, den = 1000 }));
+        public TimeSpan Duration { get; private set; } = TimeSpan.Zero;
 
-        public float FrameRate => _AvStream != null ? _AvStream->r_frame_rate.num /
-                                                            (float)_AvStream->r_frame_rate.den : 0;
+        public float FrameRate { get; private set; }
 
         public TimeSpan Position { get; private set; } = TimeSpan.Zero;
 
@@ -64,6 +70,18 @@ namespace Vocaluxe.Lib.FFmpeg
                 return false;
             }
 
+            _Packet = ffmpeg.av_packet_alloc();
+            _Frame = ffmpeg.av_frame_alloc();
+            if (_Packet == null || _Frame == null)
+            {
+                CLog.Error("Unable to alloc packet/frame");
+                _Free();
+                return false;
+            }
+
+            Duration = _ComputeDuration();
+            FrameRate = _ComputeFrameRate();
+
             if (!_InternalInit(_AvStream, _CodecContext))
             {
                 _Free();
@@ -76,42 +94,102 @@ namespace Vocaluxe.Lib.FFmpeg
 
         protected abstract bool _InternalInit(AVStream* avStream, AVCodecContext* codecContext);
 
+        private TimeSpan _ComputeDuration()
+        {
+            if (_AvStream->duration != ffmpeg.AV_NOPTS_VALUE && _AvStream->duration > 0)
+            {
+                return TimeSpan.FromMilliseconds(
+                    ffmpeg.av_rescale_q(_AvStream->duration, _AvStream->time_base, new AVRational { num = 1, den = 1000 }));
+            }
+
+            if (_FormatContext->duration != ffmpeg.AV_NOPTS_VALUE && _FormatContext->duration > 0)
+            {
+                return TimeSpan.FromSeconds(_FormatContext->duration / (double)ffmpeg.AV_TIME_BASE);
+            }
+
+            return TimeSpan.Zero;
+        }
+
+        private float _ComputeFrameRate()
+        {
+            var rate = _AvStream->avg_frame_rate;
+            if (rate.num > 0 && rate.den > 0)
+            {
+                return rate.num / (float)rate.den;
+            }
+
+            rate = _AvStream->r_frame_rate;
+            if (rate.num > 0 && rate.den > 0)
+            {
+                return rate.num / (float)rate.den;
+            }
+
+            return 0;
+        }
+
+        private static void _LogError(string message, int errorCode)
+        {
+            CLog.Error($"{message}: {FFmpegHelper.ErrorToString(errorCode)} ({errorCode})");
+        }
+
         private int _ReadSourceStream(void* opaque, byte* buffer, int bufferSize)
         {
-            if (_SourceStream == null)
+            try
             {
-                return ffmpeg.AVERROR_EOF;
-            }
+                lock (_SourceLock)
+                {
+                    if (_SourceStream == null || _ReadBuffer == null)
+                    {
+                        return ffmpeg.AVERROR_EOF;
+                    }
 
-            lock (_SourceStream)
+                    var count = Math.Min(bufferSize, _ReadBuffer.Length);
+                    var read = _SourceStream.Read(_ReadBuffer, 0, count);
+                    if (read <= 0)
+                    {
+                        return ffmpeg.AVERROR_EOF;
+                    }
+
+                    Marshal.Copy(_ReadBuffer, 0, (IntPtr)buffer, read);
+                    return read;
+                }
+            }
+            catch (Exception e)
             {
-                var finalBufferSize = (int)Math.Min(bufferSize, _SourceStream.Length - _SourceStream.Position);
-                if (finalBufferSize == 0)
-                {
-                    return ffmpeg.AVERROR_EOF;
-                }
-
-                for (var i = 0; i < finalBufferSize; i++)
-                {
-                    buffer[i] = (byte)_SourceStream.ReadByte();
-                }
-
-                return finalBufferSize;
+                CLog.Error("Error reading source stream: " + e.Message);
+                return ffmpeg.AVERROR_EXTERNAL;
             }
-        } 
-        
+        }
+
         private long _SeekSourceStream(void* opaque, long offset, int whence)
         {
-            if (_SourceStream == null)
+            try
             {
-                return -1;
-            }
+                lock (_SourceLock)
+                {
+                    if (_SourceStream == null)
+                    {
+                        return -1;
+                    }
 
-            lock (_SourceStream)
+                    if (whence == ffmpeg.AVSEEK_SIZE)
+                    {
+                        return _SourceStream.Length;
+                    }
+
+                    whence &= ~ffmpeg.AVSEEK_FORCE;
+                    if (whence < 0 || whence > 2)
+                    {
+                        return -1;
+                    }
+
+                    return _SourceStream.Seek(offset, (SeekOrigin)whence);
+                }
+            }
+            catch (Exception e)
             {
-                return whence == ffmpeg.AVSEEK_SIZE ?
-                    _SourceStream.Length :
-                    _SourceStream.Seek(offset, (SeekOrigin)whence);
+                CLog.Error("Error seeking source stream: " + e.Message);
+                return -1;
             }
         }
 
@@ -123,6 +201,7 @@ namespace Vocaluxe.Lib.FFmpeg
                 return false;
             }
 
+            _ReadBuffer = new byte[FFmpegHelper.IOBufferSize];
             _ReadSourceStreamCallback = _ReadSourceStream;
             _SeekSourceStreamCallback = _SourceStream.CanSeek ? _SeekSourceStream : null;
 
@@ -136,9 +215,11 @@ namespace Vocaluxe.Lib.FFmpeg
             _IOContext = ffmpeg.avio_alloc_context(ioBuffer, FFmpegHelper.IOBufferSize, 0, null, _ReadSourceStreamCallback, null, _SeekSourceStreamCallback);
             if (_IOContext == null)
             {
+                ffmpeg.av_free(ioBuffer);
                 CLog.Error("Unable to alloc the AVIO context");
                 return false;
             }
+
             return true;
         }
 
@@ -152,13 +233,16 @@ namespace Vocaluxe.Lib.FFmpeg
             }
 
             _FormatContext->pb = _IOContext;
+            int result;
             fixed (AVFormatContext** formatContext = &_FormatContext)
             {
-                if (ffmpeg.avformat_open_input(formatContext, null, null, null) < 0)
-                {
-                    CLog.Error("Error getting format context from video stream");
-                    return false;
-                }
+                result = ffmpeg.avformat_open_input(formatContext, null, null, null);
+            }
+
+            if (result < 0)
+            {
+                _LogError("Error getting format context from video stream", result);
+                return false;
             }
 
             return true;
@@ -166,9 +250,10 @@ namespace Vocaluxe.Lib.FFmpeg
 
         private bool _ChooseStream(AVCodec** codec)
         {
-            if (ffmpeg.avformat_find_stream_info(_FormatContext, null) < 0)
+            var result = ffmpeg.avformat_find_stream_info(_FormatContext, null);
+            if (result < 0)
             {
-                CLog.Error("Could not find stream info in video stream");
+                _LogError("Could not find stream info in video stream", result);
                 return false;
             }
 
@@ -192,15 +277,19 @@ namespace Vocaluxe.Lib.FFmpeg
                 return false;
             }
 
-            if (ffmpeg.avcodec_parameters_to_context(_CodecContext, _AvStream->codecpar) < 0)
+            var result = ffmpeg.avcodec_parameters_to_context(_CodecContext, _AvStream->codecpar);
+            if (result < 0)
             {
-                CLog.Error("Unable to fill codec parameters");
+                _LogError("Unable to fill codec parameters", result);
                 return false;
             }
 
-            if (ffmpeg.avcodec_open2(_CodecContext, codec, null) < 0)
+            _CodecContext->thread_count = Math.Min(Environment.ProcessorCount, 4);
+
+            result = ffmpeg.avcodec_open2(_CodecContext, codec, null);
+            if (result < 0)
             {
-                CLog.Error("Unable to open the codec");
+                _LogError("Unable to open the codec", result);
                 return false;
             }
 
@@ -211,192 +300,187 @@ namespace Vocaluxe.Lib.FFmpeg
 
         #region Process
 
-        private static AVPacket* _ReadPacket(AVFormatContext* formatContext)
-        {
-            var packet = ffmpeg.av_packet_alloc();
-            if (packet == null)
-            {
-                return null;
-            }
-
-            var readFrameStatus = ffmpeg.av_read_frame(formatContext, packet);
-            if (readFrameStatus >= 0)
-            {
-                if (packet->dts != ffmpeg.AV_NOPTS_VALUE)
-                {
-                    packet->pts = (int)packet->dts;
-                }
-                return packet;
-            }
-
-            ffmpeg.av_packet_free(&packet);
-            return null;
-        }
-
         protected abstract bool _ProcessFrame(AVFrame* frame);
 
-        private int _DecodePacket(AVPacket* packet)
+        private bool _NextFrame()
         {
-            var packetStatus = ffmpeg.avcodec_send_packet(_CodecContext, packet);
-            if (packetStatus < 0)
+            if (_CodecContext == null || _FormatContext == null || _Frame == null)
             {
-                CLog.Error("Error sending packet to decoder");
-                return -1;
+                return false;
             }
 
-            var frame = ffmpeg.av_frame_alloc();
-            if (frame == null)
+            while (true)
             {
-                CLog.Error("Unable to alloc frame");
-                return -1;
-            }
-
-            try
-            {
-                int avCodecReceiveFrameResponse;
-                do
+                var ret = ffmpeg.avcodec_receive_frame(_CodecContext, _Frame);
+                if (ret == 0)
                 {
-                    avCodecReceiveFrameResponse = ffmpeg.avcodec_receive_frame(_CodecContext, frame);
-                    if (avCodecReceiveFrameResponse == ffmpeg.AVERROR(ffmpeg.EAGAIN) ||
-                        avCodecReceiveFrameResponse == ffmpeg.AVERROR_EOF)
-                    {
-                        return avCodecReceiveFrameResponse;
-                    }
-
-                } while (avCodecReceiveFrameResponse > 0);
-
-                _ComputePosition(frame);
-                if (!_ProcessFrame(frame))
-                {
-                    return -1;
+                    return true;
                 }
 
-                return 0;
+                if (ret == ffmpeg.AVERROR_EOF)
+                {
+                    return false;
+                }
+
+                if (ret != ffmpeg.AVERROR(ffmpeg.EAGAIN))
+                {
+                    _LogError("Error receiving frame from decoder", ret);
+                    return false;
+                }
+
+                if (!_FeedDecoder())
+                {
+                    return false;
+                }
             }
-            finally
+        }
+
+        private bool _FeedDecoder()
+        {
+            if (_Draining)
             {
-                ffmpeg.av_frame_free(&frame);
+                return false;
+            }
+
+            while (true)
+            {
+                var ret = ffmpeg.av_read_frame(_FormatContext, _Packet);
+                if (ret < 0)
+                {
+                    _Draining = true;
+                    ffmpeg.avcodec_send_packet(_CodecContext, null);
+                    return true;
+                }
+
+                try
+                {
+                    if (_Packet->stream_index != _AvStream->index)
+                    {
+                        continue;
+                    }
+
+                    ret = ffmpeg.avcodec_send_packet(_CodecContext, _Packet);
+                    if (ret >= 0 || ret == ffmpeg.AVERROR(ffmpeg.EAGAIN))
+                    {
+                        return true;
+                    }
+
+                    if (_DecodeErrorCount++ < 10)
+                    {
+                        _LogError("Error sending packet to decoder", ret);
+                    }
+                }
+                finally
+                {
+                    ffmpeg.av_packet_unref(_Packet);
+                }
             }
         }
 
         private void _ComputePosition(AVFrame* frame)
         {
-            var elapsedMs = ffmpeg.av_rescale_q(frame->best_effort_timestamp, _AvStream->time_base, new AVRational { num = 1, den = 1000 });
+            var timestamp = frame->best_effort_timestamp;
+            if (timestamp == ffmpeg.AV_NOPTS_VALUE)
+            {
+                return;
+            }
+
+            var elapsedMs = ffmpeg.av_rescale_q(timestamp, _AvStream->time_base, new AVRational { num = 1, den = 1000 });
             Position = TimeSpan.FromMilliseconds(elapsedMs);
         }
 
         public bool GetFrame()
         {
-            do
+            if (!_NextFrame())
             {
-                var packet = _ReadPacket(_FormatContext);
-                if (packet == null)
-                {
-                    return false;
-                }
+                return false;
+            }
 
-                if (packet->stream_index != _AvStream->index)
-                {
-                    continue;
-                }
-
-                // The packet is for the video stream, try to decode it
-                var status = _DecodePacket(packet);
-                ffmpeg.av_packet_free(&packet);
-
-                if (status > 0 || status == ffmpeg.AVERROR(ffmpeg.EAGAIN))
-                {
-                    continue;
-                }
-
-                return status == 0;
-
-            } while (true);
+            try
+            {
+                _ComputePosition(_Frame);
+                return _ProcessFrame(_Frame);
+            }
+            finally
+            {
+                ffmpeg.av_frame_unref(_Frame);
+            }
         }
 
         public bool Seek(bool backward, TimeSpan targetPos)
         {
-            var timebase = _AvStream->time_base;
+            if (_FormatContext == null || _CodecContext == null || _AvStream == null)
+            {
+                return false;
+            }
 
             var flags = backward ? ffmpeg.AVSEEK_FLAG_BACKWARD : 0;
+            var timestamp = ffmpeg.av_rescale_q((long)targetPos.TotalMilliseconds, new AVRational { num = 1, den = 1000 }, _AvStream->time_base);
 
-            var pos = ffmpeg.av_rescale((long)targetPos.TotalMilliseconds, ffmpeg.AV_TIME_BASE, 1000);
+            var ret = ffmpeg.av_seek_frame(_FormatContext, _AvStream->index, timestamp, flags);
+            if (ret < 0)
+            {
+                _LogError("Seek failed", ret);
+                return false;
+            }
+
+            ffmpeg.avcodec_flush_buffers(_CodecContext);
+            _Draining = false;
             Position = targetPos;
-
-            return ffmpeg.av_seek_frame(_FormatContext,
-                _AvStream->index,
-                ffmpeg.av_rescale_q(pos, new AVRational { num = 1, den = ffmpeg.AV_TIME_BASE }, timebase),
-                flags) >= 0;
+            return true;
         }
 
-        private bool _SkipPacket(AVPacket* packet)
+        public bool DecodeUntil(TimeSpan target)
         {
-            if (ffmpeg.avcodec_send_packet(_CodecContext, packet) < 0)
-            {
-                return false;
-            }
-
-            var frame = ffmpeg.av_frame_alloc();
-            if (frame == null)
-            {
-                CLog.Error("Unable to alloc frame");
-                return false;
-            }
-
             try
             {
-                if (ffmpeg.avcodec_receive_frame(_CodecContext, frame) < 0)
+                while (_NextFrame())
                 {
-                    return false;
+                    try
+                    {
+                        _ComputePosition(_Frame);
+                        if (Position >= target)
+                        {
+                            return _ProcessFrame(_Frame);
+                        }
+                    }
+                    finally
+                    {
+                        ffmpeg.av_frame_unref(_Frame);
+                    }
                 }
-
-                _ComputePosition(frame);
-                return true;
             }
-            finally
+            catch (Exception e)
             {
-                ffmpeg.av_frame_free(&frame);
+                CLog.Error("Error decoding until target: " + e.Message);
             }
+
+            return false;
         }
 
         public bool DropWithSkip(int frameDropCount)
         {
-            // Add 1 dropped frame per 16 frames (Power of 2 -> Div is fast) as skipping takes time too and we don't want to skip again
             frameDropCount += frameDropCount / 16;
             try
             {
-                if (_SourceStream == null)
+                for (var i = 0; i < frameDropCount - 1; i++)
                 {
-                    return false;
-                }
-
-                var skippedFrames = 0;
-                while (skippedFrames < frameDropCount)
-                {
-                    var packet = _ReadPacket(_FormatContext);
-                    if (packet != null)
-                    {
-                        // Decode the package to figure out if its completing a frame
-                        if (packet->stream_index == _AvStream->index && _SkipPacket(packet))
-                        {
-                            skippedFrames++;
-                        }
-
-                        ffmpeg.av_packet_free(&packet);
-                    }
-                    else
+                    if (!_NextFrame())
                     {
                         return false;
                     }
+
+                    _ComputePosition(_Frame);
+                    ffmpeg.av_frame_unref(_Frame);
                 }
+
+                return GetFrame();
             }
-            catch (Exception)
+            catch (Exception e)
             {
-                CLog.Error("Error skipping frame");
+                CLog.Error("Error skipping frame: " + e.Message);
                 return false;
             }
-
-            return true;
         }
 
         #endregion
@@ -407,6 +491,22 @@ namespace Vocaluxe.Lib.FFmpeg
 
         private void _Free()
         {
+            if (_Packet != null)
+            {
+                fixed (AVPacket** packet = &_Packet)
+                {
+                    ffmpeg.av_packet_free(packet);
+                }
+            }
+
+            if (_Frame != null)
+            {
+                fixed (AVFrame** frame = &_Frame)
+                {
+                    ffmpeg.av_frame_free(frame);
+                }
+            }
+
             if (_FormatContext != null)
             {
                 fixed (AVFormatContext** formatContext = &_FormatContext)
@@ -435,13 +535,18 @@ namespace Vocaluxe.Lib.FFmpeg
             }
 
             _AvStream = null;
-            _ReadSourceStreamCallback = null;
-            _SourceStream = null;
+            lock (_SourceLock)
+            {
+                _ReadSourceStreamCallback = null;
+                _SeekSourceStreamCallback = null;
+                _SourceStream = null;
+                _ReadBuffer = null;
+            }
         }
 
         ~CFFmpegDecoderContextBase()
         {
-            Dispose();
+            _Free();
         }
 
         public void Dispose()
