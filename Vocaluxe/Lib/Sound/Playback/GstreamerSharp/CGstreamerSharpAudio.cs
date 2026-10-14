@@ -1,16 +1,16 @@
-﻿#region license
+#region license
 // This file is part of Vocaluxe.
-// 
+//
 // Vocaluxe is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
-// 
+//
 // Vocaluxe is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 // GNU General Public License for more details.
-// 
+//
 // You should have received a copy of the GNU General Public License
 // along with Vocaluxe. If not, see <http://www.gnu.org/licenses/>.
 #endregion
@@ -26,42 +26,40 @@ namespace Vocaluxe.Lib.Sound.Playback.GstreamerSharp
 {
     public class CGstreamerSharpAudio : CPlaybackBase
     {
+        // Max time to wait for streams that are still shutting down in the background before deinitializing GStreamer
+        private const int _TerminateTimeoutMs = 2000;
+
         public override bool Init()
         {
             if (_Initialized)
             {
-                return false;
+                return true;
             }
 #if WIN
 #if ARCH_X86
             const string varName = "GSTREAMER_1_0_ROOT_X86";
-#endif
-#if ARCH_X64
+            const string localDir = "gstreamer86";
+#elif ARCH_X64
             const string varName = "GSTREAMER_1_0_ROOT_X86_64";
+            const string localDir = "gstreamer64";
+#else
+#error Either ARCH_X86 or ARCH_X64 has to be defined
 #endif
-            string dllDirectory;
+            string dllDirectory = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "libs", "unmanaged", localDir, "bin");
 
-#if ARCH_X86
-            dllDirectory = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "libs\\unmanaged\\gstreamer86\\bin\\");
-#endif
-#if ARCH_X64
-            dllDirectory = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "libs\\unmanaged\\gstreamer64\\bin\\");
-#endif
             if (!Directory.Exists(dllDirectory))
             {
-                var gstreamerEnvVar = Environment.GetEnvironmentVariable(varName, EnvironmentVariableTarget.User);
+                // Process environment contains user and machine variables (the installer may set either of them)
+                var gstreamerEnvVar = Environment.GetEnvironmentVariable(varName);
 
-                if (gstreamerEnvVar == null || !Directory.Exists(gstreamerEnvVar))
+                if (string.IsNullOrEmpty(gstreamerEnvVar) || !Directory.Exists(gstreamerEnvVar))
                 {
-                    CLog.Error("Gstreamer not found! Make sure you installed it correctly and if it set the environment variable '" + varName + "'!", true);
+                    CLog.Error("Gstreamer not found! Make sure you installed it correctly and that it set the environment variable '" + varName + "'!", true);
                     return false;
                 }
-                else
-                {
-                    dllDirectory = gstreamerEnvVar + "bin\\";
-                }
-            }
 
+                dllDirectory = Path.Combine(gstreamerEnvVar, "bin");
+            }
 
             COSFunctions.AddEnvironmentPath(dllDirectory);
 #endif
@@ -79,7 +77,18 @@ namespace Vocaluxe.Lib.Sound.Playback.GstreamerSharp
             }
 
             base.Close();
-            Application.Deinit();
+
+            // Streams are terminated in the background. Deinit while they are still running might crash.
+            if (CGstreamerSharpAudioStream.WaitForPendingTerminations(_TerminateTimeoutMs))
+            {
+                Application.Deinit();
+            }
+            else
+            {
+                CLog.Error("Some Gstreamer streams did not terminate in time, skipping Gstreamer deinitialization");
+            }
+
+            _Initialized = false;
         }
 
         protected override IAudioStream _CreateStream(int id, ISoundSource source, bool loop, EAudioEffect effect = EAudioEffect.None)
