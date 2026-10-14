@@ -1,4 +1,5 @@
-﻿using FFmpeg.AutoGen;
+using System;
+using FFmpeg.AutoGen;
 using Vocaluxe.Base;
 using Vocaluxe.Lib.FFmpeg;
 using VocaluxeLib;
@@ -9,6 +10,10 @@ namespace Vocaluxe.Lib.Video.FFmpeg
     internal unsafe class CFFmpegVideoDecoderContext : CFFmpegDecoderContextBase
     {
         public const AVPixelFormat OutputFormat = AVPixelFormat.AV_PIX_FMT_BGRA;
+
+        // Bilinear ist deutlich guenstiger als Bicubic und fuer Hintergrundvideos ausreichend
+        private const int _ScaleFlags = (int)SwsFlags.SWS_BILINEAR;
+
         private SwsContext* _SwsContext;
         private byte_ptrArray4 _Buffer;
         private int_array4 _BufferLineSize;
@@ -38,7 +43,7 @@ namespace Vocaluxe.Lib.Video.FFmpeg
                 sizeFactor = (decimal)maxHeight / streamHeight;
             }
 
-            return ((int)(avStream->codecpar->width * sizeFactor), (int)(streamHeight * sizeFactor));
+            return (Math.Max(1, (int)(avStream->codecpar->width * sizeFactor)), Math.Max(1, (int)(streamHeight * sizeFactor)));
         }
 
         protected override bool _InternalInit(AVStream* avStream, AVCodecContext* codecContext)
@@ -56,7 +61,7 @@ namespace Vocaluxe.Lib.Video.FFmpeg
             }
 
             _SwsContext = ffmpeg.sws_getContext(codecContext->width, codecContext->height, codecContext->pix_fmt,
-                width, height, OutputFormat, (int)SwsFlags.SWS_BICUBIC, null, null, null);
+                width, height, OutputFormat, _ScaleFlags, null, null, null);
             if (_SwsContext == null)
             {
                 CLog.Error("Unable to alloc SWS context");
@@ -68,6 +73,15 @@ namespace Vocaluxe.Lib.Video.FFmpeg
 
         protected override bool _ProcessFrame(AVFrame* frame)
         {
+            // Falls sich Aufloesung oder Pixelformat mitten im Stream aendern, wird der Kontext neu erzeugt
+            _SwsContext = ffmpeg.sws_getCachedContext(_SwsContext, frame->width, frame->height, (AVPixelFormat)frame->format,
+                FrameWidth, FrameHeight, OutputFormat, _ScaleFlags, null, null, null);
+            if (_SwsContext == null)
+            {
+                CLog.Error("Unable to alloc SWS context");
+                return false;
+            }
+
             if (ffmpeg.sws_scale(_SwsContext, frame->data,
                     frame->linesize,
                     0,
@@ -85,7 +99,6 @@ namespace Vocaluxe.Lib.Video.FFmpeg
         {
             ffmpeg.sws_freeContext(_SwsContext);
             _SwsContext = null;
-
 
             if (_Buffer[0] != null)
             {
