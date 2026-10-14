@@ -1,4 +1,4 @@
-﻿#region license
+#region license
 // This file is part of Vocaluxe.
 // 
 // Vocaluxe is free software: you can redistribute it and/or modify
@@ -15,8 +15,16 @@
 // along with Vocaluxe. If not, see <http://www.gnu.org/licenses/>.
 #endregion
 
+using System;
+using System.Runtime.InteropServices;
+
 namespace Vocaluxe.Lib.Video
 {
+    /// <summary>
+    ///     Single-Producer/Single-Consumer Ringpuffer fuer Videoframes.
+    ///     Writer-Thread: Put, SetWritten. Reader-Thread: ResetStack, Pop, CFrame.SetRead, Clear.
+    ///     Es sind maximal Size-1 Frames gleichzeitig speicherbar (ein Slot bleibt frei, um voll von leer zu unterscheiden).
+    /// </summary>
     class CVideoFramebuffer
     {
         public class CFrame
@@ -42,10 +50,14 @@ namespace Vocaluxe.Lib.Video
 
         private readonly CFrame[] _Frames;
         private int _DataSize;
-        private int _Last;
-        private int _First;
-        private int _Next;
-        private bool _Initialized;
+
+        // _Last wird vom Writer (SetWritten) bewegt, _First vom Reader (SetRead/Clear).
+        // volatile stellt sicher, dass der jeweils andere Thread aktuelle Werte sieht und die Frame-Daten
+        // vor der Veroeffentlichung von _Last geschrieben sind.
+        private volatile int _Last;
+        private volatile int _First;
+        private int _Next; // Reader only
+        private volatile bool _Initialized;
 
         public int Size { get; }
 
@@ -57,7 +69,7 @@ namespace Vocaluxe.Lib.Video
         }
 
         // Initializes the framebuffer with the size of each frame
-        // MUST be called before all others
+        // MUST be called before all others (und vor dem Start des Writer-Threads)
         public void Init(int dataSize)
         {
             _DataSize = dataSize;
@@ -66,6 +78,7 @@ namespace Vocaluxe.Lib.Video
                 _Frames[i] = new CFrame(this, i, dataSize);
             }
 
+            _First = _Last = _Next = 0;
             _Initialized = true;
         }
 
@@ -94,10 +107,7 @@ namespace Vocaluxe.Lib.Video
             }
 
             var frame = _Frames[_Last];
-            for (var i = 0; i < _DataSize; i++)
-            {
-                frame.Data[i] = data[i];
-            }
+            Marshal.Copy((IntPtr)data, frame.Data, 0, _DataSize);
             frame.Time = time;
             return true;
         }
@@ -115,7 +125,7 @@ namespace Vocaluxe.Lib.Video
         }
 
         //Pops the next frame if available
-        //You have to call ResetNext before the first call to this function and call the CFrame.SetRead to free the buffers
+        //You have to call ResetStack before the first call to this function and call the CFrame.SetRead to free the buffers
         //Only call from reader thread
         public CFrame Pop()
         {
@@ -129,9 +139,23 @@ namespace Vocaluxe.Lib.Video
             return res;
         }
 
+        // Gibt alle Frames bis einschliesslich index frei, sofern index zu den bereits gepoppten Frames [_First, _Next) gehoert
         private void _SetRead(int index)
         {
-            if ((_First <= index && (index < _Next || _Next < _First)) || (_Next < _First && index < _Next))
+            var first = _First;
+            var popped = _Next - first; // Anzahl bereits gepoppter Frames
+            if (popped < 0)
+            {
+                popped += Size;
+            }
+
+            var offset = index - first; // Position von index relativ zu _First
+            if (offset < 0)
+            {
+                offset += Size;
+            }
+
+            if (offset < popped)
             {
                 _First = _GetNextIndex(index);
             }
@@ -140,7 +164,9 @@ namespace Vocaluxe.Lib.Video
         //Only call from reader thread
         public void Clear()
         {
-            _Next = _First = _Last;
+            var last = _Last;
+            _First = last;
+            _Next = last;
         }
     }
 }
