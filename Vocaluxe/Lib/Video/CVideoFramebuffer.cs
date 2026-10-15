@@ -16,7 +16,7 @@
 #endregion
 
 using System;
-using System.Runtime.InteropServices;
+using FFmpeg.AutoGen;
 
 namespace Vocaluxe.Lib.Video
 {
@@ -24,21 +24,26 @@ namespace Vocaluxe.Lib.Video
     ///     Single-Producer/Single-Consumer Ringpuffer fuer Videoframes.
     ///     Writer-Thread: Put, SetWritten. Reader-Thread: ResetStack, Pop, CFrame.SetRead, Clear.
     ///     Es sind maximal Size-1 Frames gleichzeitig speicherbar (ein Slot bleibt frei, um voll von leer zu unterscheiden).
+    ///     Die Slots halten Referenzen auf FFmpeg-Frames (nicht verwalteter Speicher), die Bilddaten werden nicht kopiert.
     /// </summary>
-    class CVideoFramebuffer
+    unsafe class CVideoFramebuffer : IDisposable
     {
         public class CFrame
         {
             private readonly CVideoFramebuffer _Parent;
             private readonly int _Index;
-            public readonly byte[] Data;
+            public readonly AVFrame* Frame;
             public float Time = -1;
 
-            public CFrame(CVideoFramebuffer parent, int index, int dataSize)
+            public CFrame(CVideoFramebuffer parent, int index)
             {
                 _Parent = parent;
                 _Index = index;
-                Data = new byte[dataSize];
+                Frame = ffmpeg.av_frame_alloc();
+                if (Frame == null)
+                {
+                    throw new OutOfMemoryException("Unable to alloc video frame");
+                }
             }
 
             //Only call from reader thread
@@ -49,7 +54,7 @@ namespace Vocaluxe.Lib.Video
         }
 
         private readonly CFrame[] _Frames;
-        private int _DataSize;
+        private volatile bool _Disposed;
 
         // _Last wird vom Writer (SetWritten) bewegt, _First vom Reader (SetRead/Clear).
         // volatile stellt sicher, dass der jeweils andere Thread aktuelle Werte sieht und die Frame-Daten
@@ -68,14 +73,13 @@ namespace Vocaluxe.Lib.Video
             _Frames = new CFrame[size];
         }
 
-        // Initializes the framebuffer with the size of each frame
+        // Initializes the framebuffer
         // MUST be called before all others (und vor dem Start des Writer-Threads)
-        public void Init(int dataSize)
+        public void Init()
         {
-            _DataSize = dataSize;
             for (var i = 0; i < Size; i++)
             {
-                _Frames[i] = new CFrame(this, i, dataSize);
+                _Frames[i] ??= new CFrame(this, i);
             }
 
             _First = _Last = _Next = 0;
@@ -99,15 +103,17 @@ namespace Vocaluxe.Lib.Video
         }
 
         //Only call from writer thread
-        public unsafe bool Put(byte* data, float time)
+        //Uebernimmt die Referenz von source (source ist danach leer), ohne die Bilddaten zu kopieren
+        public bool Put(AVFrame* source, float time)
         {
-            if (!_Initialized || IsFull())
+            if (!_Initialized || _Disposed || IsFull())
             {
                 return false;
             }
 
             var frame = _Frames[_Last];
-            Marshal.Copy((IntPtr)data, frame.Data, 0, _DataSize);
+            ffmpeg.av_frame_unref(frame.Frame);
+            ffmpeg.av_frame_move_ref(frame.Frame, source);
             frame.Time = time;
             return true;
         }
@@ -167,6 +173,31 @@ namespace Vocaluxe.Lib.Video
             var last = _Last;
             _First = last;
             _Next = last;
+        }
+
+        //Gibt alle Frames frei. Erst aufrufen, wenn weder Writer noch Reader den Puffer noch benutzen.
+        public void Dispose()
+        {
+            lock (_Frames)
+            {
+                if (_Disposed)
+                {
+                    return;
+                }
+
+                _Disposed = true;
+                _Initialized = false;
+                foreach (var frame in _Frames)
+                {
+                    if (frame == null)
+                    {
+                        continue;
+                    }
+
+                    var avFrame = frame.Frame;
+                    ffmpeg.av_frame_free(&avFrame);
+                }
+            }
         }
     }
 }
