@@ -64,17 +64,17 @@ namespace Vocaluxe.Lib.FFmpeg
                 return false;
             }
 
-            if (!_InitCodeCodecContext(codec))
-            {
-                _Free();
-                return false;
-            }
-
             _Packet = ffmpeg.av_packet_alloc();
             _Frame = ffmpeg.av_frame_alloc();
             if (_Packet == null || _Frame == null)
             {
                 CLog.Error("Unable to alloc packet/frame");
+                _Free();
+                return false;
+            }
+
+            if (!_InitPreferredCodec(codec) && !_InitCodeCodecContext(codec))
+            {
                 _Free();
                 return false;
             }
@@ -93,6 +93,134 @@ namespace Vocaluxe.Lib.FFmpeg
         }
 
         protected abstract bool _InternalInit(AVStream* avStream, AVCodecContext* codecContext);
+
+        /// <summary>
+        ///     Liefert einen Decoder, der statt des Standard-Decoders versucht werden soll (z.B. ein Decoder, der nur mit
+        ///     Hardware-Beschleunigung funktioniert), oder null. Der Decoder wird vor der Verwendung mit dem ersten Frame
+        ///     getestet; schlaegt das fehl, wird der Standard-Decoder verwendet.
+        /// </summary>
+        protected virtual AVCodec* _GetPreferredCodec(AVCodec* defaultCodec)
+        {
+            return null;
+        }
+
+        /// <summary>
+        ///     Prueft, ob ein mit dem Probe-Decoder erzeugter Frame gueltig ist (z.B. wirklich von der Hardware kommt)
+        /// </summary>
+        protected virtual bool _IsProbeFrameValid(AVFrame* frame)
+        {
+            return true;
+        }
+
+        /// <summary>
+        ///     Versucht den bevorzugten Decoder zu oeffnen und einen ersten Frame zu decodieren.
+        ///     Danach wird an den Anfang zurueckgesprungen. Bei Fehlschlag ist kein Codec-Kontext offen.
+        /// </summary>
+        private bool _InitPreferredCodec(AVCodec* defaultCodec)
+        {
+            var codec = _GetPreferredCodec(defaultCodec);
+            if (codec == null || codec == defaultCodec)
+            {
+                return false;
+            }
+
+            var codecName = Marshal.PtrToStringAnsi((IntPtr)codec->name);
+            if (!_SourceStream.CanSeek)
+            {
+                return false; // Nach dem Test muss an den Anfang zurueckgesprungen werden koennen
+            }
+
+            var ok = _InitCodeCodecContext(codec) && _ProbeFirstFrame();
+
+            // Zurueck an den Anfang, egal ob erfolgreich (die gelesenen Pakete fehlen sonst) oder nicht
+            var startTime = _AvStream->start_time != ffmpeg.AV_NOPTS_VALUE ? _AvStream->start_time : 0;
+            if (ffmpeg.av_seek_frame(_FormatContext, _AvStream->index, startTime, ffmpeg.AVSEEK_FLAG_BACKWARD) < 0)
+            {
+                ok = false;
+                CLog.Error($"Unable to seek back after testing decoder {codecName}");
+            }
+
+            _Draining = false;
+            _DecodeErrorCount = 0;
+            if (ok)
+            {
+                ffmpeg.avcodec_flush_buffers(_CodecContext);
+                return true;
+            }
+
+            CLog.Information($"Decoder {codecName} could not decode this stream, using the default decoder");
+            _FreeCodecContext();
+            return false;
+        }
+
+        /// <summary>
+        ///     Decodiert hoechstens die ersten Pakete, bis ein Frame entsteht oder ein Fehler auftritt
+        /// </summary>
+        private bool _ProbeFirstFrame()
+        {
+            const int maxPackets = 300;
+            for (var packets = 0; packets < maxPackets;)
+            {
+                var ret = ffmpeg.avcodec_receive_frame(_CodecContext, _Frame);
+                if (ret == 0)
+                {
+                    var valid = _IsProbeFrameValid(_Frame);
+                    ffmpeg.av_frame_unref(_Frame);
+                    return valid;
+                }
+
+                if (ret != ffmpeg.AVERROR(ffmpeg.EAGAIN))
+                {
+                    return false;
+                }
+
+                ret = ffmpeg.av_read_frame(_FormatContext, _Packet);
+                if (ret < 0)
+                {
+                    return false;
+                }
+
+                try
+                {
+                    if (_Packet->stream_index != _AvStream->index)
+                    {
+                        continue;
+                    }
+
+                    packets++;
+                    ret = ffmpeg.avcodec_send_packet(_CodecContext, _Packet);
+                    if (ret < 0 && ret != ffmpeg.AVERROR(ffmpeg.EAGAIN))
+                    {
+                        return false;
+                    }
+                }
+                finally
+                {
+                    ffmpeg.av_packet_unref(_Packet);
+                }
+            }
+
+            return false;
+        }
+
+        private void _FreeCodecContext()
+        {
+            if (_CodecContext != null)
+            {
+                fixed (AVCodecContext** codecContext = &_CodecContext)
+                {
+                    ffmpeg.avcodec_free_context(codecContext);
+                }
+            }
+        }
+
+        /// <summary>
+        ///     Wird vor avcodec_open2 aufgerufen, um z.B. Threads oder Hardware-Decoding einzustellen
+        /// </summary>
+        protected virtual void _ConfigureCodecContext(AVCodec* codec, AVCodecContext* codecContext)
+        {
+            codecContext->thread_count = Math.Min(Environment.ProcessorCount, 4);
+        }
 
         private TimeSpan _ComputeDuration()
         {
@@ -284,7 +412,7 @@ namespace Vocaluxe.Lib.FFmpeg
                 return false;
             }
 
-            _CodecContext->thread_count = Math.Min(Environment.ProcessorCount, 4);
+            _ConfigureCodecContext(codec, _CodecContext);
 
             result = ffmpeg.avcodec_open2(_CodecContext, codec, null);
             if (result < 0)
