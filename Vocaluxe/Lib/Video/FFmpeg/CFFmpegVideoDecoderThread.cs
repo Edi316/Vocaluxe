@@ -18,7 +18,9 @@
 using System;
 using System.IO;
 using System.Threading;
+using FFmpeg.AutoGen;
 using Vocaluxe.Base;
+using Vocaluxe.Lib.Draw;
 using VocaluxeLib.Draw;
 using VocaluxeLib.Log;
 
@@ -54,6 +56,8 @@ namespace Vocaluxe.Lib.Video.FFmpeg
 
         private volatile bool _RequestSkip;
         private volatile bool _Terminated;
+        private bool _ThreadEnded; // geschuetzt durch _EndMutex
+        private readonly object _EndMutex = new();
         private bool _FrameAvailable; // decoder thread only
         private volatile bool _NoMoreFrames;
         private volatile bool _Loop;
@@ -103,7 +107,7 @@ namespace Vocaluxe.Lib.Video.FFmpeg
             }
 
             // Hier (synchron) statt im Decoder-Thread, damit der Reader nie einen uninitialisierten Puffer sieht
-            _VideoFramebuffer.Init(_DecoderContext.FrameBufferSize);
+            _VideoFramebuffer.Init();
             _FrameAvailable = false;
             return true;
         }
@@ -135,7 +139,13 @@ namespace Vocaluxe.Lib.Video.FFmpeg
 
         public void Stop()
         {
-            _Terminated = true;
+            bool threadEnded;
+            lock (_EndMutex)
+            {
+                _Terminated = true;
+                threadEnded = _ThreadEnded;
+            }
+
             _EvWakeUp.Set();
             _EvNoMoreFrames.Set();
 
@@ -143,6 +153,12 @@ namespace Vocaluxe.Lib.Video.FFmpeg
             {
                 // Thread wurde nie gestartet -> niemand sonst gibt den Context frei
                 _Free();
+                _VideoFramebuffer.Dispose();
+            }
+            else if (threadEnded)
+            {
+                // Thread ist mit einem Fehler beendet worden und hat die Frames fuer den Reader stehen lassen
+                _VideoFramebuffer.Dispose();
             }
         }
 
@@ -237,13 +253,9 @@ namespace Vocaluxe.Lib.Video.FFmpeg
                 var curFrame = _FindFrame(time);
                 if (curFrame != null)
                 {
-                    if (frame == null)
+                    if (_TryGetVideoFrame(curFrame.Frame, out var videoFrame))
                     {
-                        frame = CDraw.AddTexture(_DecoderContext.FrameWidth, _DecoderContext.FrameHeight, curFrame.Data);
-                    }
-                    else
-                    {
-                        CDraw.UpdateTexture(frame, _DecoderContext.FrameWidth, _DecoderContext.FrameHeight, curFrame.Data);
+                        CDraw.UpdateVideoTexture(ref frame, videoFrame);
                     }
 
                     if (!_Paused)
@@ -267,6 +279,49 @@ namespace Vocaluxe.Lib.Video.FFmpeg
             finished = _NoMoreFrames && _VideoFramebuffer.IsEmpty();
 
             return result;
+        }
+
+        /// <summary>
+        ///     Beschreibt einen Frame aus dem Ringpuffer fuer den Renderer (ohne die Bilddaten zu kopieren)
+        /// </summary>
+        private static bool _TryGetVideoFrame(AVFrame* avFrame, out SVideoFrame videoFrame)
+        {
+            EVideoFrameFormat format;
+            switch ((AVPixelFormat)avFrame->format)
+            {
+                case AVPixelFormat.AV_PIX_FMT_YUV420P:
+                    format = EVideoFrameFormat.Yuv420P;
+                    break;
+                case AVPixelFormat.AV_PIX_FMT_BGRA:
+                    format = EVideoFrameFormat.Bgra;
+                    break;
+                default:
+                    videoFrame = default;
+                    return false;
+            }
+
+            EVideoColorMatrix colorMatrix;
+            switch (avFrame->colorspace)
+            {
+                case AVColorSpace.AVCOL_SPC_BT709:
+                case AVColorSpace.AVCOL_SPC_SMPTE240M:
+                    colorMatrix = EVideoColorMatrix.Bt709;
+                    break;
+                case AVColorSpace.AVCOL_SPC_BT2020_NCL:
+                case AVColorSpace.AVCOL_SPC_BT2020_CL:
+                    colorMatrix = EVideoColorMatrix.Bt2020;
+                    break;
+                default:
+                    colorMatrix = EVideoColorMatrix.Bt601;
+                    break;
+            }
+
+            videoFrame = new SVideoFrame(format, avFrame->width, avFrame->height,
+                (IntPtr)avFrame->data[0], avFrame->linesize[0],
+                (IntPtr)avFrame->data[1], avFrame->linesize[1],
+                (IntPtr)avFrame->data[2], avFrame->linesize[2],
+                colorMatrix, avFrame->color_range == AVColorRange.AVCOL_RANGE_JPEG);
+            return true;
         }
 
         //Time should be < Length
@@ -447,7 +502,7 @@ namespace Vocaluxe.Lib.Video.FFmpeg
         private bool _CopyDecodedFrameToBuffer()
         {
             _LastDecodedTime = (float)_DecoderContext.Position.TotalSeconds;
-            var result = _VideoFramebuffer.Put(_DecoderContext.DecodedFrameBuffer, _LastDecodedTime);
+            var result = _VideoFramebuffer.Put(_DecoderContext.OutputFrame, _LastDecodedTime);
             _FrameAvailable = false;
             return result;
         }
@@ -515,6 +570,18 @@ namespace Vocaluxe.Lib.Video.FFmpeg
             finally
             {
                 _Free();
+                bool terminated;
+                lock (_EndMutex)
+                {
+                    _ThreadEnded = true;
+                    terminated = _Terminated;
+                }
+
+                // Bei regulaerem Ende (Stop) benutzt der Reader den Puffer nicht mehr. Nach einem Fehler gibt Stop() ihn frei.
+                if (terminated)
+                {
+                    _VideoFramebuffer.Dispose();
+                }
             }
         }
     }
