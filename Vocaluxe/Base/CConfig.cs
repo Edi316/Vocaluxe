@@ -143,6 +143,12 @@ namespace Vocaluxe.Base
             public string FFmpegPath;
             [DefaultValue(EVideoDownscaleResolution.TR_CONFIG_SCALING_DISABLED)]
             public EVideoDownscaleResolution VideoDownscaleResolution;
+            [DefaultValue(EOffOn.TR_CONFIG_ON)]
+            public EOffOn HardwareDecoding;
+            [DefaultValue(EOffOn.TR_CONFIG_ON)]
+            public EOffOn GpuColorConversion;
+            [XmlRanged(0, 64), DefaultValue(0)]
+            public int DecoderThreads;
         }
 
         public struct SConfigSound
@@ -638,6 +644,12 @@ namespace Vocaluxe.Base
                     return "The path to FFmpeg binaries";
                 case "VideoDownscaleResolution":
                     return "The resolution to which you want to downscale videos: " + CHelper.ListStrings(Enum.GetNames(typeof(EVideoDownscaleResolution)));
+                case "HardwareDecoding":
+                    return "Decode videos on the graphics card if supported (D3D11VA/DXVA2), falls back to software decoding: " + CHelper.ListStrings(Enum.GetNames(typeof(EOffOn)));
+                case "GpuColorConversion":
+                    return "Upload videos as YUV and convert them to RGB on the graphics card (Direct3D/OpenGL): " + CHelper.ListStrings(Enum.GetNames(typeof(EOffOn)));
+                case "DecoderThreads":
+                    return "Number of threads used for decoding a video, 0 = automatic (all cores) [0..64]";
                 default:
                     return null;
             }
