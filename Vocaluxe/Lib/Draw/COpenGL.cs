@@ -27,6 +27,7 @@ using OpenTK.Graphics.OpenGL;
 using Vocaluxe.Base;
 using VocaluxeLib;
 using VocaluxeLib.Draw;
+using VocaluxeLib.Log;
 using BlendingFactorDest = OpenTK.Graphics.OpenGL.BlendingFactorDest;
 using BlendingFactorSrc = OpenTK.Graphics.OpenGL.BlendingFactorSrc;
 using ClearBufferMask = OpenTK.Graphics.OpenGL.ClearBufferMask;
@@ -84,6 +85,57 @@ namespace Vocaluxe.Lib.Draw
             GL.BindTexture(TextureTarget.Texture2D, 0);
         }
 
+        /// <summary>
+        ///     Y-, U- und V-Ebene (Luminance8) bei Yuv420P-Videotexturen, sonst null
+        /// </summary>
+        public readonly int[] Planes;
+        /// <summary>
+        ///     Pixel-Buffer-Objects fuer den Upload der Ebenen (eine pro Ebene), null wenn nicht unterstuetzt
+        /// </summary>
+        public readonly int[] PixelBuffers;
+
+        /// <summary>
+        ///     Erzeugt eine Videotextur ohne Mipmaps. Bei Yuv420P zusaetzlich die drei Ebenen-Texturen.
+        /// </summary>
+        public COGLTexture(Size dataSize, Size textureSize, EVideoFrameFormat format, bool usePixelBuffers) : base(dataSize, textureSize)
+        {
+            VideoFormat = format;
+            Name = _CreateTexture(textureSize.Width, textureSize.Height, PixelInternalFormat.Rgba, PixelFormat.Bgra);
+
+            var planeCount = 1;
+            if (format == EVideoFrameFormat.Yuv420P)
+            {
+                planeCount = 3;
+                var chromaWidth = (dataSize.Width + 1) / 2;
+                var chromaHeight = (dataSize.Height + 1) / 2;
+                Planes = new[]
+                {
+                    _CreateTexture(dataSize.Width, dataSize.Height, PixelInternalFormat.Luminance8, PixelFormat.Luminance),
+                    _CreateTexture(chromaWidth, chromaHeight, PixelInternalFormat.Luminance8, PixelFormat.Luminance),
+                    _CreateTexture(chromaWidth, chromaHeight, PixelInternalFormat.Luminance8, PixelFormat.Luminance)
+                };
+            }
+
+            if (usePixelBuffers)
+            {
+                PixelBuffers = new int[planeCount];
+                GL.GenBuffers(planeCount, PixelBuffers);
+            }
+        }
+
+        private static int _CreateTexture(int width, int height, PixelInternalFormat internalFormat, PixelFormat format)
+        {
+            var name = GL.GenTexture();
+            GL.BindTexture(TextureTarget.Texture2D, name);
+            GL.TexImage2D(TextureTarget.Texture2D, 0, internalFormat, width, height, 0, format, PixelType.UnsignedByte, IntPtr.Zero);
+            GL.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureWrapS, (int)OpenTK.Graphics.TextureWrapMode.ClampToEdge);
+            GL.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureWrapT, (int)OpenTK.Graphics.TextureWrapMode.ClampToEdge);
+            GL.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureMagFilter, (int)TextureMagFilter.Linear);
+            GL.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureMinFilter, (int)TextureMinFilter.Linear);
+            GL.BindTexture(TextureTarget.Texture2D, 0);
+            return name;
+        }
+
         public override bool IsLoaded
         {
             get { return Name != 0; }
@@ -96,6 +148,16 @@ namespace Vocaluxe.Lib.Draw
             {
                 GL.DeleteTexture(Name);
             }
+
+            if (Planes != null)
+            {
+                GL.DeleteTextures(Planes.Length, Planes);
+            }
+
+            if (PixelBuffers != null)
+            {
+                GL.DeleteBuffers(PixelBuffers.Length, PixelBuffers);
+            }
         }
     }
 
@@ -103,6 +165,28 @@ namespace Vocaluxe.Lib.Draw
     {
         private readonly GLControl _Control;
         private int _FBO;
+
+        // Video
+        private bool _VideoNonPowerOf2; // OpenGL >= 2.0: Videotexturen in exakter Groesse
+        private bool _PixelBuffersSupported; // OpenGL >= 2.1
+        private int _YuvProgram;
+        private int _YuvRowR, _YuvRowG, _YuvRowB;
+        private bool _VideoErrorLogged;
+
+        private const string _YuvShaderSource = @"
+uniform sampler2D texY;
+uniform sampler2D texU;
+uniform sampler2D texV;
+uniform vec4 rowR;
+uniform vec4 rowG;
+uniform vec4 rowB;
+
+void main()
+{
+    vec2 uv = gl_TexCoord[0].st;
+    vec4 yuv = vec4(texture2D(texY, uv).r, texture2D(texU, uv).r, texture2D(texV, uv).r, 1.0);
+    gl_FragColor = vec4(clamp(vec3(dot(rowR, yuv), dot(rowG, yuv), dot(rowB, yuv)), 0.0, 1.0), 1.0);
+}";
 
         public COpenGL()
         {
@@ -270,6 +354,8 @@ namespace Vocaluxe.Lib.Draw
 
             GL.GenFramebuffers(1, out _FBO);
 
+            _InitVideo();
+
             return true;
         }
 
@@ -277,6 +363,11 @@ namespace Vocaluxe.Lib.Draw
         {
             base.Close();
             GL.DeleteFramebuffers(1, ref _FBO);
+            if (_YuvProgram != 0)
+            {
+                GL.DeleteProgram(_YuvProgram);
+                _YuvProgram = 0;
+            }
         }
 
         protected override void _OnBeforeDraw()
@@ -510,6 +601,257 @@ namespace Vocaluxe.Lib.Draw
 
             GL.BindTexture(TextureTarget.Texture2D, 0);
         }
+
+        #region video
+        private static Version _GetGlVersion()
+        {
+            try
+            {
+                // Format: "<major>.<minor>[.<release>] [vendor info]"
+                var version = GL.GetString(OpenTK.Graphics.OpenGL.StringName.Version) ?? "";
+                var numbers = version.Split(' ')[0].Split('.');
+                if (numbers.Length >= 2 && int.TryParse(numbers[0], out var major) && int.TryParse(numbers[1], out var minor))
+                {
+                    return new Version(major, minor);
+                }
+            }
+            catch (Exception)
+            {
+                // Ignore -> treated as old version
+            }
+
+            return new Version(1, 0);
+        }
+
+        /// <summary>
+        ///     Prueft, welche Videopfade der Treiber unterstuetzt und erstellt das Shaderprogramm fuer die YUV-Umrechnung
+        /// </summary>
+        private void _InitVideo()
+        {
+            var version = _GetGlVersion();
+            _VideoNonPowerOf2 = version >= new Version(2, 0);
+            _PixelBuffersSupported = version >= new Version(2, 1);
+
+            if (CConfig.Config.FFmpeg.GpuColorConversion != EOffOn.TR_CONFIG_ON)
+            {
+                CLog.Information("[OpenGL] GPU color conversion for videos disabled by config");
+                return;
+            }
+
+            if (!_VideoNonPowerOf2)
+            {
+                CLog.Information("[OpenGL] OpenGL 2.0 is required for GPU color conversion of videos, using CPU conversion");
+                return;
+            }
+
+            try
+            {
+                _YuvProgram = _CreateYuvProgram();
+            }
+            catch (Exception e)
+            {
+                CLog.Error(e, "[OpenGL] Unable to create the YUV shader, using CPU conversion for videos");
+                _YuvProgram = 0;
+            }
+        }
+
+        private int _CreateYuvProgram()
+        {
+            var shader = GL.CreateShader(OpenTK.Graphics.OpenGL.ShaderType.FragmentShader);
+            GL.ShaderSource(shader, _YuvShaderSource);
+            GL.CompileShader(shader);
+            GL.GetShader(shader, OpenTK.Graphics.OpenGL.ShaderParameter.CompileStatus, out var compiled);
+            if (compiled == 0)
+            {
+                CLog.Error("[OpenGL] YUV shader compile error: " + GL.GetShaderInfoLog(shader));
+                GL.DeleteShader(shader);
+                return 0;
+            }
+
+            var program = GL.CreateProgram();
+            GL.AttachShader(program, shader);
+            GL.LinkProgram(program);
+            GL.DeleteShader(shader); // Flagged for deletion, freed with the program
+
+            var locY = GL.GetUniformLocation(program, "texY");
+            var locU = GL.GetUniformLocation(program, "texU");
+            var locV = GL.GetUniformLocation(program, "texV");
+            _YuvRowR = GL.GetUniformLocation(program, "rowR");
+            _YuvRowG = GL.GetUniformLocation(program, "rowG");
+            _YuvRowB = GL.GetUniformLocation(program, "rowB");
+            // All uniforms are used, so a missing location means that linking failed
+            if (locY < 0 || locU < 0 || locV < 0 || _YuvRowR < 0 || _YuvRowG < 0 || _YuvRowB < 0)
+            {
+                CLog.Error("[OpenGL] YUV shader link error: " + GL.GetProgramInfoLog(program));
+                GL.DeleteProgram(program);
+                return 0;
+            }
+
+            GL.UseProgram(program);
+            GL.Uniform1(locY, 0);
+            GL.Uniform1(locU, 1);
+            GL.Uniform1(locV, 2);
+            GL.UseProgram(0);
+            return program;
+        }
+
+        public override bool SupportsYuvVideo => _YuvProgram != 0;
+
+        protected override COGLTexture _CreateVideoTexture(Size size, EVideoFrameFormat format)
+        {
+            var textureSize = _VideoNonPowerOf2 ? size : new Size(_CheckForNextPowerOf2(size.Width), _CheckForNextPowerOf2(size.Height));
+            var texture = new COGLTexture(size, textureSize, format, _PixelBuffersSupported);
+            if (!textureSize.Equals(size))
+            {
+                // Unused part of a Pow2 texture must not contain garbage (visible at the borders due to filtering)
+                _ClearTexture(texture);
+            }
+
+            return texture;
+        }
+
+        protected override void _WriteVideoFrameToTexture(COGLTexture texture, in SVideoFrame frame)
+        {
+            try
+            {
+                if (frame.Format == EVideoFrameFormat.Bgra)
+                {
+                    _UploadPlane(texture.Name, texture.PixelBuffers?[0] ?? 0, frame, 0, PixelFormat.Bgra);
+                    return;
+                }
+
+                for (var i = 0; i < 3; i++)
+                {
+                    _UploadPlane(texture.Planes[i], texture.PixelBuffers?[i] ?? 0, frame, i, PixelFormat.Luminance);
+                }
+
+                _ConvertYuvToTexture(texture, frame);
+            }
+            catch (Exception e)
+            {
+                if (!_VideoErrorLogged)
+                {
+                    CLog.Error(e, "[OpenGL] Failed to update video texture");
+                    _VideoErrorLogged = true;
+                }
+            }
+        }
+
+        /// <summary>
+        ///     Laedt eine Ebene in die Textur. Mit PBO: Puffer verwerfen (Orphaning), mappen, kopieren -> der Treiber kann asynchron hochladen.
+        /// </summary>
+        private static void _UploadPlane(int textureName, int pixelBuffer, in SVideoFrame frame, int plane, PixelFormat format)
+        {
+            var width = frame.GetPlaneWidth(plane);
+            var height = frame.GetPlaneHeight(plane);
+            var rowBytes = frame.GetPlaneRowBytes(plane);
+            var stride = frame.GetStride(plane);
+            var bytesPerPixel = rowBytes / width;
+
+            GL.BindTexture(TextureTarget.Texture2D, textureName);
+            if (pixelBuffer != 0)
+            {
+                var size = rowBytes * height;
+                GL.BindBuffer(OpenTK.Graphics.OpenGL.BufferTarget.PixelUnpackBuffer, pixelBuffer);
+                GL.BufferData(OpenTK.Graphics.OpenGL.BufferTarget.PixelUnpackBuffer, (IntPtr)size, IntPtr.Zero, OpenTK.Graphics.OpenGL.BufferUsageHint.StreamDraw);
+                var mapped = GL.MapBuffer(OpenTK.Graphics.OpenGL.BufferTarget.PixelUnpackBuffer, OpenTK.Graphics.OpenGL.BufferAccess.WriteOnly);
+                if (mapped != IntPtr.Zero)
+                {
+                    CVideoFrameHelper.CopyPlane(frame.GetPlane(plane), stride, mapped, rowBytes, rowBytes, height);
+                    var unmapped = GL.UnmapBuffer(OpenTK.Graphics.OpenGL.BufferTarget.PixelUnpackBuffer);
+                    if (unmapped)
+                    {
+                        GL.TexSubImage2D(TextureTarget.Texture2D, 0, 0, 0, width, height, format, PixelType.UnsignedByte, IntPtr.Zero);
+                    }
+
+                    GL.BindBuffer(OpenTK.Graphics.OpenGL.BufferTarget.PixelUnpackBuffer, 0);
+                    GL.BindTexture(TextureTarget.Texture2D, 0);
+                    return;
+                }
+
+                GL.BindBuffer(OpenTK.Graphics.OpenGL.BufferTarget.PixelUnpackBuffer, 0);
+            }
+
+            // Direct upload, the row length handles a stride with padding
+            GL.PixelStore(PixelStoreParameter.UnpackRowLength, stride / bytesPerPixel);
+            GL.TexSubImage2D(TextureTarget.Texture2D, 0, 0, 0, width, height, format, PixelType.UnsignedByte, frame.GetPlane(plane));
+            GL.PixelStore(PixelStoreParameter.UnpackRowLength, 0);
+            GL.BindTexture(TextureTarget.Texture2D, 0);
+        }
+
+        /// <summary>
+        ///     Rechnet die drei Ebenen per Fragmentshader in die RGB-Textur um (Render-to-Texture ueber das FBO)
+        /// </summary>
+        private void _ConvertYuvToTexture(COGLTexture texture, in SVideoFrame frame)
+        {
+            GL.PushAttrib(OpenTK.Graphics.OpenGL.AttribMask.EnableBit | OpenTK.Graphics.OpenGL.AttribMask.ViewportBit | OpenTK.Graphics.OpenGL.AttribMask.ColorBufferBit |
+                          OpenTK.Graphics.OpenGL.AttribMask.CurrentBit);
+            GL.GetInteger(OpenTK.Graphics.OpenGL.GetPName.MatrixMode, out int matrixMode);
+
+            GL.BindFramebuffer(OpenTK.Graphics.OpenGL.FramebufferTarget.Framebuffer, _FBO);
+            GL.FramebufferTexture2D(OpenTK.Graphics.OpenGL.FramebufferTarget.Framebuffer, OpenTK.Graphics.OpenGL.FramebufferAttachment.ColorAttachment0, TextureTarget.Texture2D,
+                texture.Name, 0);
+            GL.Viewport(0, 0, frame.Width, frame.Height);
+            GL.Disable(EnableCap.Blend);
+            GL.Disable(EnableCap.DepthTest);
+
+            GL.MatrixMode(MatrixMode.Projection);
+            GL.PushMatrix();
+            GL.LoadIdentity();
+            GL.Ortho(0, 1, 0, 1, -1, 1);
+            GL.MatrixMode(MatrixMode.Modelview);
+            GL.PushMatrix();
+            GL.LoadIdentity();
+            GL.MatrixMode(MatrixMode.Texture);
+            GL.PushMatrix();
+            GL.LoadIdentity();
+
+            var rows = CVideoFrameHelper.GetYuvToRgbRows(frame.ColorMatrix, frame.FullRange);
+            GL.UseProgram(_YuvProgram);
+            GL.Uniform4(_YuvRowR, rows[0], rows[1], rows[2], rows[3]);
+            GL.Uniform4(_YuvRowG, rows[4], rows[5], rows[6], rows[7]);
+            GL.Uniform4(_YuvRowB, rows[8], rows[9], rows[10], rows[11]);
+
+            GL.ActiveTexture(OpenTK.Graphics.OpenGL.TextureUnit.Texture2);
+            GL.BindTexture(TextureTarget.Texture2D, texture.Planes[2]);
+            GL.ActiveTexture(OpenTK.Graphics.OpenGL.TextureUnit.Texture1);
+            GL.BindTexture(TextureTarget.Texture2D, texture.Planes[1]);
+            GL.ActiveTexture(OpenTK.Graphics.OpenGL.TextureUnit.Texture0);
+            GL.BindTexture(TextureTarget.Texture2D, texture.Planes[0]);
+
+            // Texture row 0 (top of the image) is rendered to y=0, so the result has the same orientation as uploaded RGB data
+            GL.Color4(1f, 1f, 1f, 1f);
+            GL.Begin(PrimitiveType.Quads);
+            GL.TexCoord2(0f, 0f);
+            GL.Vertex2(0f, 0f);
+            GL.TexCoord2(1f, 0f);
+            GL.Vertex2(1f, 0f);
+            GL.TexCoord2(1f, 1f);
+            GL.Vertex2(1f, 1f);
+            GL.TexCoord2(0f, 1f);
+            GL.Vertex2(0f, 1f);
+            GL.End();
+
+            GL.UseProgram(0);
+            GL.ActiveTexture(OpenTK.Graphics.OpenGL.TextureUnit.Texture2);
+            GL.BindTexture(TextureTarget.Texture2D, 0);
+            GL.ActiveTexture(OpenTK.Graphics.OpenGL.TextureUnit.Texture1);
+            GL.BindTexture(TextureTarget.Texture2D, 0);
+            GL.ActiveTexture(OpenTK.Graphics.OpenGL.TextureUnit.Texture0);
+            GL.BindTexture(TextureTarget.Texture2D, 0);
+
+            GL.MatrixMode(MatrixMode.Texture);
+            GL.PopMatrix();
+            GL.MatrixMode(MatrixMode.Modelview);
+            GL.PopMatrix();
+            GL.MatrixMode(MatrixMode.Projection);
+            GL.PopMatrix();
+            GL.MatrixMode((MatrixMode)matrixMode);
+
+            GL.BindFramebuffer(OpenTK.Graphics.OpenGL.FramebufferTarget.Framebuffer, 0);
+            GL.PopAttrib();
+        }
+        #endregion video
 
         protected override void _DrawTexture(COGLTexture texture, SDrawCoords dc, SColorF color, bool isReflection = false)
         {

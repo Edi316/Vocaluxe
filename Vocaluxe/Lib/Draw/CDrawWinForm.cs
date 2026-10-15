@@ -437,6 +437,38 @@ namespace Vocaluxe.Lib.Draw
             }
         }
 
+        public bool SupportsYuvVideo => false;
+
+        public void UpdateVideoTexture(ref CTextureRef textureRef, in SVideoFrame frame)
+        {
+            if (frame.Format != EVideoFrameFormat.Bgra)
+            {
+                return;
+            }
+
+            if (!_TextureExists(textureRef) || textureRef.OrigSize.Width != frame.Width || textureRef.OrigSize.Height != frame.Height)
+            {
+                RemoveTexture(ref textureRef);
+                using (var bmp = new Bitmap(frame.Width, frame.Height, frame.GetStride(0), PixelFormat.Format32bppArgb, frame.GetPlane(0)))
+                {
+                    textureRef = AddTexture(bmp);
+                }
+
+                return;
+            }
+
+            var target = _Bitmaps[textureRef.Id];
+            var bmpData = target.LockBits(new Rectangle(0, 0, target.Width, target.Height), ImageLockMode.WriteOnly, PixelFormat.Format32bppArgb);
+            try
+            {
+                CVideoFrameHelper.CopyPlane(frame.GetPlane(0), frame.GetStride(0), bmpData.Scan0, bmpData.Stride, frame.GetPlaneRowBytes(0), frame.Height);
+            }
+            finally
+            {
+                target.UnlockBits(bmpData);
+            }
+        }
+
         public void UpdateTexture(CTextureRef textureRef, Bitmap bmp)
         {
             if (_TextureExists(textureRef))

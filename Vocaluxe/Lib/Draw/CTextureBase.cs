@@ -59,6 +59,11 @@ namespace Vocaluxe.Lib.Draw
         public abstract bool IsLoaded { get; }
 
         /// <summary>
+        ///     Format der Videoframes, wenn dies eine Videotextur ist (wird bei jedem Frame komplett neu beschrieben), sonst null
+        /// </summary>
+        public EVideoFrameFormat? VideoFormat { get; protected set; }
+
+        /// <summary>
         ///     Creates a new texture
         /// </summary>
         /// <param name="dataSize">Size of the data used</param>
@@ -93,6 +98,8 @@ namespace Vocaluxe.Lib.Draw
         }
 
         private bool _IsDisposed;
+
+        public bool IsDisposed => _IsDisposed;
 
         public virtual void Dispose()
         {
