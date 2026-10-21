@@ -535,8 +535,8 @@ namespace Vocaluxe.Screens
             }
 
             var track = new CTrack { Entry = entry, Player = new CSongPlayer(), AudioMode = CJukebox.GetAudioMode(entry) };
-            var file = track.AudioMode == EAudioMode.TR_AUDIOMODE_INSTRUMENTAL ? song.GetInstrumental() : song.GetMP3();
-            track.Player.Load(song, file, CJukebox.ShowVideo);
+            var source = track.AudioMode == EAudioMode.TR_AUDIOMODE_INSTRUMENTAL ? song.GetInstrumentalSource() : song.GetAudioSource();
+            track.Player.Load(song, source, CJukebox.ShowVideo);
             if (!track.Player.SoundLoaded)
             {
                 track.Player.Close();
@@ -772,7 +772,7 @@ namespace Vocaluxe.Screens
 
         private void _ToggleAudioMode()
         {
-            if (_Current == null || !_Current.Entry.Song.HasInstrumental())
+            if (_Current == null || !_Current.Entry.Song.HasInstrumental)
             {
                 return;
             }
@@ -1338,7 +1338,7 @@ namespace Vocaluxe.Screens
             _SetButtonState(_ButtonShuffle, CJukebox.Shuffle);
             _SetButtonState(_ButtonRepeat, CJukebox.Repeat);
             _SetButtonState(_ButtonLyrics, CJukebox.ShowLyrics);
-            _SetButtonState(_ButtonAudioMode, song != null && song.HasInstrumental());
+            _SetButtonState(_ButtonAudioMode, song != null && song.HasInstrumental);
 
             var audioMode = _Buttons[_ButtonAudioMode];
             var audioModeIcon = _Statics[_StaticAudioModeIcon];

@@ -81,7 +81,7 @@ namespace Vocaluxe.SongQueue
                 return false;
             }
 
-            if (!song.HasInstrumental() || audioMode == EAudioMode.TR_AUDIOMODE_VOCALS && !song.HasVocals())
+            if (!song.HasInstrumental || audioMode == EAudioMode.TR_AUDIOMODE_VOCALS && !song.HasVocals)
             {
                 audioMode = EAudioMode.TR_AUDIOMODE_NORMAL;
             }
