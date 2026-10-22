@@ -1336,7 +1336,7 @@ namespace VocaluxeLib.Menu
             }
 
             audioSlide.Clear();
-            if (!song.HasInstrumental())
+            if (!song.HasInstrumental)
             {
                 if (audioSlide.Selected)
                 {
@@ -1349,7 +1349,7 @@ namespace VocaluxeLib.Menu
 
             audioSlide.AddValue("TR_AUDIOMODE_NORMAL", null, (int)EAudioMode.TR_AUDIOMODE_NORMAL);
             audioSlide.AddValue("TR_AUDIOMODE_INSTRUMENTAL", null, (int)EAudioMode.TR_AUDIOMODE_INSTRUMENTAL);
-            if (song.HasVocals())
+            if (song.HasVocals)
             {
                 audioSlide.AddValue("TR_AUDIOMODE_VOCALS", null, (int)EAudioMode.TR_AUDIOMODE_VOCALS);
             }

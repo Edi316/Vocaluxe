@@ -944,6 +944,54 @@ namespace Vocaluxe.Lib.Draw
             }
         }
 
+        /// <summary>
+        ///     True, wenn der Treiber Yuv420P-Videoframes hochladen und auf der GPU nach RGB umrechnen kann
+        /// </summary>
+        public virtual bool SupportsYuvVideo => false;
+
+        /// <summary>
+        ///     Erzeugt eine Videotextur (ohne Mipmaps, fuer haeufiges Neubeschreiben optimiert)
+        /// </summary>
+        protected abstract TTextureType _CreateVideoTexture(Size size, EVideoFrameFormat format);
+
+        /// <summary>
+        ///     Schreibt einen Videoframe in eine mit _CreateVideoTexture erzeugte Textur passender Groesse und passenden Formats
+        /// </summary>
+        protected abstract void _WriteVideoFrameToTexture(TTextureType texture, in SVideoFrame frame);
+
+        /// <summary>
+        ///     Schreibt einen Videoframe in die Textur und erzeugt sie, falls noetig (textureRef == null, andere Groesse oder anderes Format)
+        /// </summary>
+        public void UpdateVideoTexture(ref CTextureRef textureRef, in SVideoFrame frame)
+        {
+            _EnsureMainThread();
+            var size = new Size(frame.Width, frame.Height);
+            if (textureRef == null || !_GetTexture(textureRef, out var texture, false))
+            {
+                texture = _CreateVideoTexture(size, frame.Format);
+                _WriteVideoFrameToTexture(texture, frame);
+                textureRef = _GetTextureReference(size, texture);
+                return;
+            }
+
+            if (texture.VideoFormat != frame.Format || !texture.DataSize.Equals(size) || texture.RefCount != 1)
+            {
+                var newTexture = _CreateVideoTexture(size, frame.Format);
+                lock (_Textures)
+                {
+                    _DisposeTexture(texture);
+                    newTexture.RefCount = 1;
+                    _TextureCount++;
+                    _Textures[textureRef.Id] = newTexture;
+                }
+
+                texture = newTexture;
+                textureRef.OrigSize = size;
+            }
+
+            _WriteVideoFrameToTexture(texture, frame);
+        }
+
         public CTextureRef CopyTexture(CTextureRef textureRef)
         {
             // Lock to make sure the texture is not disposed while we are in this method
