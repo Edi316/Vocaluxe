@@ -1,0 +1,141 @@
+name: 'Vocaluxe Custom Build FFmpeg'
+
+on:
+  push:
+    tags:
+      - '[0-9].[0-9].[0-9]'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-2025
+    env:
+      # 'latest' takes the newest 8.1.x build; set an autobuild-YYYY-MM-DD-HH-MM tag to pin one
+      FFMPEG_RELEASE: latest
+      FFMPEG_ASSET_PATTERN: 'ffmpeg-n8.1*-win64-gpl-shared-8.1.zip'
+      GSTREAMER_VERSION: '1.4.5'
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v5
+
+      - name: Setup MSBuild
+        uses: microsoft/setup-msbuild@v3
+        with:
+          vs-version: latest
+          msbuild-architecture: x64
+
+      - name: Setup NuGet
+        uses: NuGet/setup-nuget@v4
+
+      - name: Restore NuGet packages
+        run: nuget restore Vocaluxe.sln
+
+      - name: Build solution
+        env:
+          VOCALUXE_VERSION: ${{ github.ref_name }}
+        run: msbuild Vocaluxe.sln /p:Configuration=ReleaseWin /p:Platform="x64"
+
+      - name: Download theme videos
+        shell: pwsh
+        run: |
+          Invoke-WebRequest -Uri 'https://github.com/Vocaluxe/VocaluxeDependencies/raw/master/zips/themes/vocaluxe.themes.vocaluxe-2024.video-part1.zip' -OutFile 'vocaluxe.themes.vocaluxe-2024.video.zip'
+          7z x '-aoa' '-oOutput/' './vocaluxe.themes.vocaluxe-2024.video.zip'
+          Remove-Item './vocaluxe.themes.vocaluxe-2024.video.zip'
+
+      - name: Resolve FFmpeg build
+        id: ffmpeg
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $release = gh api "repos/BtbN/FFmpeg-Builds/releases/tags/$env:FFMPEG_RELEASE" | ConvertFrom-Json
+          $asset = $release.assets | Where-Object { $_.name -like $env:FFMPEG_ASSET_PATTERN } | Select-Object -First 1
+          if (-not $asset) { throw "No asset matching '$env:FFMPEG_ASSET_PATTERN' in BtbN/FFmpeg-Builds release '$env:FFMPEG_RELEASE'" }
+          Write-Host "Using $($asset.name)"
+          "id=$($asset.id)" >> $env:GITHUB_OUTPUT
+          "url=$($asset.browser_download_url)" >> $env:GITHUB_OUTPUT
+
+      - name: Cache FFmpeg and GStreamer libs
+        id: libs-cache
+        uses: actions/cache@v4
+        with:
+          path: deps
+          key: libs-ffmpeg-${{ steps.ffmpeg.outputs.id }}-gstreamer-${{ env.GSTREAMER_VERSION }}
+
+      - name: Download FFmpeg and GStreamer libs
+        if: steps.libs-cache.outputs.cache-hit != 'true'
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path deps/ffmpeg, deps/tmp | Out-Null
+
+          Invoke-WebRequest -Uri '${{ steps.ffmpeg.outputs.url }}' -OutFile deps/tmp/ffmpeg.zip
+          7z x -y '-odeps/tmp/ffmpeg' deps/tmp/ffmpeg.zip
+          Copy-Item deps/tmp/ffmpeg/*/bin/*.dll -Destination deps/ffmpeg
+
+          $msiUrl = "https://gstreamer.freedesktop.org/data/pkg/windows/$env:GSTREAMER_VERSION/gstreamer-1.0-x86_64-$env:GSTREAMER_VERSION.msi"
+          $msi = Join-Path $PWD 'deps\tmp\gstreamer.msi'
+          $target = Join-Path $PWD 'deps\tmp\gstreamer'
+          Invoke-WebRequest -Uri $msiUrl -OutFile $msi
+          $p = Start-Process msiexec.exe -ArgumentList '/a', "`"$msi`"", '/qn', "TARGETDIR=`"$target`"" -Wait -PassThru
+          if ($p.ExitCode -ne 0) { throw "msiexec failed with exit code $($p.ExitCode)" }
+          $gstRoot = (Get-ChildItem $target -Recurse -Filter 'libgstreamer-1.0-0.dll' | Select-Object -First 1).Directory.Parent
+          if (-not $gstRoot) { throw "GStreamer runtime not found in extracted MSI" }
+          Move-Item $gstRoot.FullName deps/gstreamer64
+
+          Remove-Item deps/tmp -Recurse -Force
+          Get-ChildItem deps/ffmpeg
+          Get-ChildItem deps/gstreamer64
+
+      - name: Copy FFmpeg and GStreamer libs to output
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path Output/libs/unmanaged | Out-Null
+          Copy-Item deps/ffmpeg, deps/gstreamer64 -Destination Output/libs/unmanaged -Recurse -Force
+
+      - name: Run tests
+        shell: pwsh
+        run: |
+          nuget install NUnit.ConsoleRunner -Version 3.20.1 -OutputDirectory testrunner
+          .\testrunner\NUnit.ConsoleRunner.3.20.1\tools\nunit3-console.exe ".\Tests\bin\Release\Tests.dll" --result=".\TestResult.xml"
+
+      - name: Create release package name
+        id: package
+        shell: pwsh
+        run: |
+          $date = Get-Date -Format 'yyyyMMdd'
+          $filename = "Vocaluxe_CustomBuild_FFmpeg_$date.7z"
+          "filename=$filename" >> $env:GITHUB_OUTPUT
+
+      - name: Create 7Z package
+        shell: pwsh
+        run: |
+          7z a "${{ steps.package.outputs.filename }}" ".\Output\*"
+
+      - name: Upload release package artifact
+        uses: actions/upload-artifact@v6
+        with:
+          name: release-package
+          path: ${{ steps.package.outputs.filename }}
+          if-no-files-found: error
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download release package artifact
+        uses: actions/download-artifact@v7
+        with:
+          name: release-package
+          path: artifacts
+
+      - name: Create release
+        uses: softprops/action-gh-release@v3
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: Vocaluxe Custom Build FFmpeg
+          prerelease: false
+          target_commitish: ${{ github.sha }}
+          files: artifacts/*.7z
+          fail_on_unmatched_files: true
