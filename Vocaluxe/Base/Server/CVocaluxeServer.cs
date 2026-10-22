@@ -670,16 +670,16 @@ namespace Vocaluxe.Base.Server
             {
                 var songs = CSongs.Songs;
                 _SongInfoCache = (from s in songs
-                    select _GetSongInfo(s, sendCovers)).AsParallel().ToArray<SSongInfo>();
+                    select _GetSongInfo(s, sendCovers)).AsParallel().ToArray();
             }
 
             return _SongInfoCache;
         }
 
-        public static string GetMp3Path(int songId)
+        public static string GetAudioPath(int songId)
         {
             var song = CSongs.GetSong(songId);
-            return song.GetMP3();
+            return song.GetAudioSource().GetUri();
         }
 
         public static int GetCurrentSongId()

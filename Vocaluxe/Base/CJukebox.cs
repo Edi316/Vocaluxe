@@ -296,7 +296,7 @@ namespace Vocaluxe.Base
         public static EAudioMode GetAudioMode(CJukeboxEntry entry)
         {
             var song = entry == null ? null : entry.Song;
-            return song != null && song.HasInstrumental() && AudioMode == EAudioMode.TR_AUDIOMODE_INSTRUMENTAL
+            return song != null && song.HasInstrumental && AudioMode == EAudioMode.TR_AUDIOMODE_INSTRUMENTAL
                        ? EAudioMode.TR_AUDIOMODE_INSTRUMENTAL
                        : EAudioMode.TR_AUDIOMODE_NORMAL;
         }
