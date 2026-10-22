@@ -139,14 +139,7 @@
         <Font>Outline</Font>
         <Text>TR_BUTTON_NEXT</Text>
       </Text>
-      <Reflection>
-        <Height>39</Height>
-        <Space>15</Space>
-      </Reflection>
-      <SelReflection>
-        <Height>39</Height>
-        <Space>15</Space>
-      </SelReflection>
+
     </Button>
     <Button Name="ButtonBack">
       <Skin>Button</Skin>
@@ -174,14 +167,6 @@
         <Font>Outline</Font>
         <Text>TR_BUTTON_BACK</Text>
       </Text>
-      <Reflection>
-        <Height>39</Height>
-        <Space>15</Space>
-      </Reflection>
-      <SelReflection>
-        <Height>39</Height>
-        <Space>15</Space>
-      </SelReflection>
     </Button>
   </Buttons>
   <SongMenus />
@@ -191,7 +176,7 @@
       <Skin />
       <SkinArrowLeft>SelectSlideArrowLeft</SkinArrowLeft>
       <SkinArrowRight>SelectSlideArrowRight</SkinArrowRight>
-      <SkinSelected>SelectSlide</SkinSelected>
+      <SkinSelected>SelectSlideSongOptions</SkinSelected>
       <SkinArrowLeftSelected>SelectSlideArrowLeft</SkinArrowLeftSelected>
       <SkinArrowRightSelected>SelectSlideArrowRight</SkinArrowRightSelected>
       <Rect>
@@ -216,7 +201,7 @@
         <Z>0</Z>
       </RectArrowRight>
       <Color Name="SelectSlideColor" />
-      <SelColor Name="SelectSlideSelColor" />
+      <SelColor Name="ButtonSelColor" />
       <ArrowColor Name="ArrowColor" />
       <ArrowSelColor Name="ArrowSelColor" />
       <TextColor Name="TextColorAlpha" />
@@ -233,7 +218,7 @@
       <Skin />
       <SkinArrowLeft>SelectSlideArrowLeft</SkinArrowLeft>
       <SkinArrowRight>SelectSlideArrowRight</SkinArrowRight>
-      <SkinSelected>SelectSlide</SkinSelected>
+      <SkinSelected>SelectSlideSongOptions</SkinSelected>
       <SkinArrowLeftSelected>SelectSlideArrowLeft</SkinArrowLeftSelected>
       <SkinArrowRightSelected>SelectSlideArrowRight</SkinArrowRightSelected>
       <Rect>
@@ -258,7 +243,7 @@
         <Z>0</Z>
       </RectArrowRight>
       <Color Name="SelectSlideColor" />
-      <SelColor Name="SelectSlideSelColor" />
+      <SelColor Name="ButtonSelColor" />
       <ArrowColor Name="ArrowColor" />
       <ArrowSelColor Name="ArrowSelColor" />
       <TextColor Name="TextColorAlpha" />
@@ -275,7 +260,7 @@
       <Skin />
       <SkinArrowLeft>SelectSlideArrowLeft</SkinArrowLeft>
       <SkinArrowRight>SelectSlideArrowRight</SkinArrowRight>
-      <SkinSelected>SelectSlide</SkinSelected>
+      <SkinSelected>SelectSlideSongOptions</SkinSelected>
       <SkinArrowLeftSelected>SelectSlideArrowLeft</SkinArrowLeftSelected>
       <SkinArrowRightSelected>SelectSlideArrowRight</SkinArrowRightSelected>
       <Rect>
@@ -300,7 +285,7 @@
         <Z>0</Z>
       </RectArrowRight>
       <Color Name="SelectSlideColor" />
-      <SelColor Name="SelectSlideSelColor" />
+      <SelColor Name="ButtonSelColor" />
       <ArrowColor Name="ArrowColor" />
       <ArrowSelColor Name="ArrowSelColor" />
       <TextColor Name="TextColorAlpha" />
@@ -317,7 +302,7 @@
       <Skin />
       <SkinArrowLeft>SelectSlideArrowLeft</SkinArrowLeft>
       <SkinArrowRight>SelectSlideArrowRight</SkinArrowRight>
-      <SkinSelected>SelectSlide</SkinSelected>
+      <SkinSelected>SelectSlideSongOptions</SkinSelected>
       <SkinArrowLeftSelected>SelectSlideArrowLeft</SkinArrowLeftSelected>
       <SkinArrowRightSelected>SelectSlideArrowRight</SkinArrowRightSelected>
       <Rect>
@@ -342,7 +327,7 @@
         <Z>0</Z>
       </RectArrowRight>
       <Color Name="SelectSlideColor" />
-      <SelColor Name="SelectSlideSelColor" />
+      <SelColor Name="ButtonSelColor" />
       <ArrowColor Name="ArrowColor" />
       <ArrowSelColor Name="ArrowSelColor" />
       <TextColor Name="TextColorAlpha" />
@@ -359,7 +344,7 @@
       <Skin />
       <SkinArrowLeft>SelectSlideArrowLeft</SkinArrowLeft>
       <SkinArrowRight>SelectSlideArrowRight</SkinArrowRight>
-      <SkinSelected>SelectSlide</SkinSelected>
+      <SkinSelected>SelectSlideSongOptions</SkinSelected>
       <SkinArrowLeftSelected>SelectSlideArrowLeft</SkinArrowLeftSelected>
       <SkinArrowRightSelected>SelectSlideArrowRight</SkinArrowRightSelected>
       <Rect>
@@ -384,7 +369,7 @@
         <Z>0</Z>
       </RectArrowRight>
       <Color Name="SelectSlideColor" />
-      <SelColor Name="SelectSlideSelColor" />
+      <SelColor Name="ButtonSelColor" />
       <ArrowColor Name="ArrowColor" />
       <ArrowSelColor Name="ArrowSelColor" />
       <TextColor Name="TextColorAlpha" />
