@@ -48,6 +48,10 @@ namespace Vocaluxe.Lib.Draw
         CTextureRef CopyTexture(CTextureRef textureRef);
         void RemoveTexture(ref CTextureRef texture);
 
+        // Video
+        bool SupportsYuvVideo { get; }
+        void UpdateVideoTexture(ref CTextureRef texture, in SVideoFrame frame);
+
         // Basic Draw Methods
         void DrawRect(SColorF color, SRectF rect, bool allMonitors = true);
         void DrawRectReflection(SColorF color, SRectF rect, float space, float height);

@@ -19,37 +19,45 @@ using System.Diagnostics;
 using System.IO;
 using VocaluxeLib.Draw;
 
-namespace Vocaluxe.Lib.Video.Acinerella
+namespace Vocaluxe.Lib.Video.FFmpeg
 {
-    class CDecoder
+    class CFFmpegVideoDecoder
     {
-        private readonly Stopwatch _LoopTimer = new Stopwatch();
+        private readonly Stopwatch _LoopTimer = new();
 
         private float _Gap;
         private bool _Paused;
         private float _LoopTime;
 
-        private CDecoderThread _Thread;
-        public float Length { get; private set; }
+        private CFFmpegVideoDecoderThread _Thread;
+        public float Duration { get; private set; }
         public bool Finished { get; private set; }
 
-        public CDecoder()
+        public CFFmpegVideoDecoder()
         {
-            Length = 0;
+            Duration = 0;
             Finished = true;
         }
 
         public bool Loop
         {
-            get { return _Thread.Loop; }
+            get => _Thread != null && _Thread.Loop;
             set
             {
+                if (_Thread == null)
                 {
-                    _Thread.Loop = value;
-                    if (value)
+                    return;
+                }
+
+                _Thread.Loop = value;
+                if (value)
+                {
+                    _LoopTime = _Thread.RequestTime;
+                    // Timer nur laufen lassen, wenn nicht pausiert
+                    _LoopTimer.Reset();
+                    if (!_Paused)
                     {
-                        _LoopTime = _Thread.RequestTime;
-                        _LoopTimer.Restart();
+                        _LoopTimer.Start();
                     }
                 }
             }
@@ -68,34 +76,39 @@ namespace Vocaluxe.Lib.Video.Acinerella
                 if (_Paused)
                 {
                     _LoopTimer.Stop();
-                    _Thread.Pause();
+                    _Thread?.Pause();
                 }
                 else
                 {
-                    _LoopTimer.Start();
-                    _Thread.Resume();
+                    if (Loop)
+                    {
+                        _LoopTimer.Start();
+                    }
+
+                    _Thread?.Resume();
                 }
             }
         }
 
-        public bool Open(string fileName)
+        public bool LoadStream(Stream stream)
         {
             if (_Thread != null)
             {
                 return false;
             }
 
-            if (!File.Exists(fileName))
+            var thread = new CFFmpegVideoDecoderThread();
+            if (thread.LoadStream(stream))
             {
-                return false;
-            }
-
-            _Thread = new CDecoderThread();
-            if (_Thread.LoadFile(fileName))
-            {
-                Length = _Thread.Length;
+                _Thread = thread;
+                Duration = (float)_Thread.Duration.TotalSeconds;
                 Finished = false;
-                return _Thread.Start();
+                if (_Thread.Start())
+                {
+                    return true;
+                }
+
+                thread.Stop();
             }
 
             _Thread = null;
@@ -104,34 +117,32 @@ namespace Vocaluxe.Lib.Video.Acinerella
 
         public void Close()
         {
-            if (_Thread != null)
-            {
-                _Thread.Stop();
-            }
-
-            Length = 0;
+            _Thread?.Stop();
+            _Thread = null; // Der Thread beendet sich selbst und gibt FFmpeg-Ressourcen frei; dieses Objekt kann neu geladen werden
+            _LoopTimer.Reset();
+            _LoopTime = 0;
+            _Gap = 0;
+            _Paused = false;
+            Duration = 0;
             Finished = true;
         }
 
         public bool GetFrame(ref CTextureRef frame, float time, out float videoTime)
         {
-            if (Finished)
+            if (Finished || _Thread == null)
             {
-                videoTime = Length - _Gap;
+                videoTime = Duration - _Gap;
                 return false;
             }
 
             if (Loop)
             {
                 time = _LoopTime + _LoopTimer.ElapsedMilliseconds / 1000f;
+                // Duration <= 0 (unbekannte Laenge) darf nie zu einer Endlosschleife fuehren
                 var loopLength = _Thread.LoopLength;
-                if (time >= loopLength)
+                if (loopLength > 0 && time >= loopLength)
                 {
-                    do
-                    {
-                        time -= loopLength;
-                    } while (time >= loopLength);
-
+                    time %= loopLength;
                     _LoopTime = time;
                     _LoopTimer.Restart();
                 }
@@ -157,6 +168,11 @@ namespace Vocaluxe.Lib.Video.Acinerella
 
         public bool Skip(float start, float gap)
         {
+            if (_Thread == null)
+            {
+                return false;
+            }
+
             Finished = false;
             _Gap = gap;
             _Thread.Skip(start + gap);

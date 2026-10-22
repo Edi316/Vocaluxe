@@ -16,9 +16,9 @@
 #endregion
 
 using System;
-using System.IO;
 using VocaluxeLib.Draw;
 using VocaluxeLib.Songs;
+using VocaluxeLib.Songs.Sources;
 
 namespace VocaluxeLib.Utils.Player
 {
@@ -29,6 +29,15 @@ namespace VocaluxeLib.Utils.Player
         private bool _VideoEnabled;
         private CVideoStream _Video;
         private CFading _VideoFading;
+
+        public ISoundSource SoundSource
+        {
+            get
+            {
+                var song = _Song;
+                return song?.GetAudioSource();
+            }
+        }
 
         public bool VideoEnabled
         {
@@ -66,7 +75,7 @@ namespace VocaluxeLib.Utils.Player
             get
             {
                 var song = _Song;
-                return song == null ? -1 : song.Id;
+                return song?.Id ?? -1;
             }
         }
 
@@ -75,12 +84,11 @@ namespace VocaluxeLib.Utils.Player
             get
             {
                 var song = _Song;
-                return song != null && !string.IsNullOrEmpty(song.Folder) && !string.IsNullOrEmpty(song.Video) &&
-                       File.Exists(Path.Combine(song.Folder, song.Video));
+                return song?.HasVideo ?? false;
             }
         }
 
-        public override string ArtistAndTitle
+        public override string DisplayName
         {
             get
             {
@@ -90,7 +98,7 @@ namespace VocaluxeLib.Utils.Player
                     return song.Artist + " - " + song.Title;
                 }
 
-                return base.ArtistAndTitle;
+                return base.DisplayName;
             }
         }
 
@@ -112,25 +120,31 @@ namespace VocaluxeLib.Utils.Player
                 var video = _Video;
                 var song = _Song;
                 if (video == null || video.IsClosed() || song == null || CBase.Video == null || CBase.Sound == null)
-                    return null;
-
-                if (CBase.Video.GetFrame(video, CBase.Sound.GetPosition(_StreamId)))
                 {
-                    var texture = video.Texture;
-                    if (texture != null)
+                    return null;
+                }
+
+                if (!CBase.Video.GetFrame(video, CBase.Sound.GetPosition(_StreamId)))
+                {
+                    return null;
+                }
+
+                var texture = video.Texture;
+                if (texture == null)
+                {
+                    return null;
+                }
+
+                if (_VideoFading != null)
+                {
+                    texture.Color.A = _VideoFading.GetValue(out var finished);
+                    if (finished)
                     {
-                        if (_VideoFading != null)
-                        {
-                            bool finished;
-                            texture.Color.A = _VideoFading.GetValue(out finished);
-                            if (finished)
-                                _VideoFading = null;
-                        }
-                        return texture;
+                        _VideoFading = null;
                     }
                 }
 
-                return null;
+                return texture;
             }
         }
 
@@ -141,10 +155,10 @@ namespace VocaluxeLib.Utils.Player
                 throw new ArgumentNullException("song");
             }
 
-            Load(song, song.GetMP3(), true, position, autoplay);
+            Load(song, song.GetAudioSource(), true, position, autoplay);
         }
 
-        public void Load(CSong song, string audioFile, bool loadVideo, float position = 0f, bool autoplay = false)
+        public void Load(CSong song, ISoundSource source, bool loadVideo, float position = 0f, bool autoplay = false)
         {
             if (song == null)
             {
@@ -153,7 +167,7 @@ namespace VocaluxeLib.Utils.Player
 
             lock (_lock)
             {
-                Load(audioFile, position, autoplay);
+                Load(source, position, autoplay);
                 _Song = song;
                 if (loadVideo)
                 {
@@ -186,13 +200,29 @@ namespace VocaluxeLib.Utils.Player
                     return;
                 }
 
-                if (_Video != null || !SongHasVideo)
+                if (_Video != null)
+                {
+                    if (!_Video.IsClosed())
+                    {
+                        return;
+                    }
+
+                    _Video = null;
+                    _VideoFading = null;
+                }
+
+                if (CBase.Video == null)
                 {
                     return;
                 }
 
-                var videoFilePath = Path.Combine(song.Folder, song.Video);
-                var video = CBase.Video?.Load(videoFilePath);
+                var videoStream = song.GetVideoStream();
+                if (videoStream == null)
+                {
+                    return;
+                }
+
+                var video = CBase.Video.LoadStream(videoStream);
                 if (video == null)
                 {
                     return;
@@ -203,12 +233,12 @@ namespace VocaluxeLib.Utils.Player
 
                 if (IsPlaying)
                 {
-                    CBase.Video?.Skip(video, Position, song.VideoGap);
-                    CBase.Video?.Resume(video);
+                    CBase.Video.Skip(video, Position, song.VideoGap);
+                    CBase.Video.Resume(video);
                 }
                 else
                 {
-                    CBase.Video?.Skip(video, 0f, song.VideoGap);
+                    CBase.Video.Skip(video, 0f, song.VideoGap);
                 }
             }
         }
@@ -224,10 +254,10 @@ namespace VocaluxeLib.Utils.Player
 
                 var video = _Video;
                 var song = _Song;
-                if (video != null && !video.IsClosed() && song != null)
+                if (video != null && !video.IsClosed() && song != null && CBase.Video != null)
                 {
-                    CBase.Video?.Skip(video, Position, song.VideoGap);
-                    CBase.Video?.Resume(video);
+                    CBase.Video.Skip(video, Position, song.VideoGap);
+                    CBase.Video.Resume(video);
                 }
 
                 return true;
@@ -244,9 +274,9 @@ namespace VocaluxeLib.Utils.Player
                 }
 
                 var video = _Video;
-                if (video != null && !video.IsClosed())
+                if (video != null && !video.IsClosed() && CBase.Video != null)
                 {
-                    CBase.Video?.Pause(video);
+                    CBase.Video.Pause(video);
                 }
 
                 return true;
@@ -264,12 +294,12 @@ namespace VocaluxeLib.Utils.Player
 
                 var video = _Video;
                 var song = _Song;
-                if (video != null && !video.IsClosed())
+                if (video != null && !video.IsClosed() && CBase.Video != null)
                 {
-                    CBase.Video?.Pause(video);
+                    CBase.Video.Pause(video);
                     if (song != null)
                     {
-                        CBase.Video?.Skip(video, 0f, song.VideoGap);
+                        CBase.Video.Skip(video, 0f, song.VideoGap);
                     }
                 }
 
@@ -285,6 +315,7 @@ namespace VocaluxeLib.Utils.Player
                 {
                     CBase.Video?.Close(ref _Video);
                     _Video = null;
+                    _VideoFading = null;
                 }
             }
         }
