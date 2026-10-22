@@ -1,0 +1,90 @@
+<?xml version='1.0' encoding='utf-8'?>
+<Screen xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+  <Informations>
+    <ScreenName>PopupScreenVolumeControl</ScreenName>
+    <ScreenVersion>1</ScreenVersion>
+  </Informations>
+  <Backgrounds />
+  <Statics>
+    <Static Name="StaticBG">
+      <Skin />
+      <Color Name="BackgroundColorAlpha" />
+      <Rect>
+        <X>1755</X>
+        <Y>1020</Y>
+        <W>165</W>
+        <H>60</H>
+        <Z>-2</Z>
+      </Rect>
+    </Static>
+  </Statics>
+  <Texts>
+    <Text Name="Text1">
+      <X>1600.5</X>
+      <Y>1023</Y>
+      <Z>-2</Z>
+      <H>40.5</H>
+      <MaxW>120</MaxW>
+      <Color Name="Invisible" />
+      <SelColor Name="TextSelColor" />
+      <Align>Left</Align>
+      <ResizeAlign>Center</ResizeAlign>
+      <Style>Bold</Style>
+      <Font>Outline</Font>
+      <Text>TR_SCREENPVOLUMECONTROL_VOLUME</Text>
+    </Text>
+  </Texts>
+  <Buttons />
+  <SongMenus />
+  <Lyrics />
+  <SelectSlides>
+    <SelectSlide Name="SelectSlideVolume">
+      <Skin />
+      <SkinArrowLeft>VolDown</SkinArrowLeft>
+      <SkinArrowRight>VolUp</SkinArrowRight>
+      <SkinSelected />
+      <SkinArrowLeftSelected>VolDown</SkinArrowLeftSelected>
+      <SkinArrowRightSelected>VolUp</SkinArrowRightSelected>
+      <Rect>
+        <X>1755</X>
+        <Y>1027.5</Y>
+        <W>165</W>
+        <H>45</H>
+        <Z>-2</Z>
+      </Rect>
+      <RectArrowLeft>
+        <X>1762.5</X>
+        <Y>1027.5</Y>
+        <W>45</W>
+        <H>45</H>
+        <Z>-2</Z>
+      </RectArrowLeft>
+      <RectArrowRight>
+        <X>1867.5</X>
+        <Y>1027.5</Y>
+        <W>45</W>
+        <H>45</H>
+        <Z>-2</Z>
+      </RectArrowRight>
+      <Color Name="SelectSlideColor" />
+      <SelColor Name="SelectSlideSelColor" />
+      <ArrowColor Name="ArrowColor" />
+      <ArrowSelColor Name="ArrowSelColor" />
+      <TextColor Name="TextColor" />
+      <TextSelColor Name="TextColor" />
+      <TextH>27</TextH>
+      <TextRelativeX>40</TextRelativeX>
+      <TextRelativeY>0</TextRelativeY>
+      <TextMaxW>40</TextMaxW>
+      <TextFont>Outline</TextFont>
+      <TextStyle>Bold</TextStyle>
+      <NumVisible>1</NumVisible>
+    </SelectSlide>
+  </SelectSlides>
+  <SingNotes />
+  <NameSelections />
+  <Equalizers />
+  <Playlists />
+  <ParticleEffects />
+  <ScreenSettings />
+</Screen>
