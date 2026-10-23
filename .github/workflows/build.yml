@@ -15,7 +15,21 @@ jobs:
       # 'latest' takes the newest 8.1.x build; set an autobuild-YYYY-MM-DD-HH-MM tag to pin one
       FFMPEG_RELEASE: latest
       FFMPEG_ASSET_PATTERN: 'ffmpeg-n8.1*-win64-gpl-shared-8.1.zip'
-      GSTREAMER_VERSION: '1.4.5'
+      # 1.26.x is the last GStreamer series released as MSI
+      GSTREAMER_VERSION: '1.26.11'
+      # Plugins needed for audio playback (playbin, autoaudiosink, audiokaraoke, decoders and demuxers)
+      GSTREAMER_PLUGINS: >-
+        coreelements playback typefindfunctions pbtypes
+        audioconvert audioresample volume audiofx audioparsers
+        autodetect wasapi directsound
+        id3demux apetag icydemux wavparse ogg vorbis opus opusparse flac mpg123
+        isomp4 matroska asf libav
+      # Libraries gstreamer-sharp binds to
+      GSTREAMER_LIBS: >-
+        libgstapp-1.0-0.dll libgstaudio-1.0-0.dll libgstbase-1.0-0.dll libgstcontroller-1.0-0.dll
+        libgstfft-1.0-0.dll libgstnet-1.0-0.dll libgstpbutils-1.0-0.dll libgstriff-1.0-0.dll
+        libgstrtp-1.0-0.dll libgstrtsp-1.0-0.dll libgstsdp-1.0-0.dll libgsttag-1.0-0.dll
+        libgstvideo-1.0-0.dll
     steps:
       - name: Checkout source
         uses: actions/checkout@v5
@@ -59,34 +73,101 @@ jobs:
 
       - name: Cache FFmpeg and GStreamer libs
         id: libs-cache
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: deps
-          key: libs-ffmpeg-${{ steps.ffmpeg.outputs.id }}-gstreamer-${{ env.GSTREAMER_VERSION }}
+          key: libs-ffmpeg-${{ steps.ffmpeg.outputs.id }}-gstreamer-${{ env.GSTREAMER_VERSION }}-${{ hashFiles('.github/workflows/build.yml') }}
 
-      - name: Download FFmpeg and GStreamer libs
+      - name: Download FFmpeg and GStreamer
         if: steps.libs-cache.outputs.cache-hit != 'true'
         shell: pwsh
         run: |
-          New-Item -ItemType Directory -Force -Path deps/ffmpeg, deps/tmp | Out-Null
+          $tmp = Join-Path $env:RUNNER_TEMP 'libs'
+          New-Item -ItemType Directory -Force -Path deps/ffmpeg, $tmp | Out-Null
 
-          Invoke-WebRequest -Uri '${{ steps.ffmpeg.outputs.url }}' -OutFile deps/tmp/ffmpeg.zip
-          7z x -y '-odeps/tmp/ffmpeg' deps/tmp/ffmpeg.zip
-          Copy-Item deps/tmp/ffmpeg/*/bin/*.dll -Destination deps/ffmpeg
+          Invoke-WebRequest -Uri '${{ steps.ffmpeg.outputs.url }}' -OutFile "$tmp\ffmpeg.zip"
+          7z x -y "-o$tmp\ffmpeg" "$tmp\ffmpeg.zip"
+          Copy-Item "$tmp\ffmpeg\*\bin\*.dll" -Destination deps/ffmpeg
 
-          $msiUrl = "https://gstreamer.freedesktop.org/data/pkg/windows/$env:GSTREAMER_VERSION/gstreamer-1.0-x86_64-$env:GSTREAMER_VERSION.msi"
-          $msi = Join-Path $PWD 'deps\tmp\gstreamer.msi'
-          $target = Join-Path $PWD 'deps\tmp\gstreamer'
+          $msiUrl = "https://gstreamer.freedesktop.org/data/pkg/windows/$env:GSTREAMER_VERSION/mingw/gstreamer-1.0-mingw-x86_64-$env:GSTREAMER_VERSION.msi"
+          $msi = Join-Path $tmp 'gstreamer.msi'
+          $target = Join-Path $tmp 'gstreamer'
           Invoke-WebRequest -Uri $msiUrl -OutFile $msi
           $p = Start-Process msiexec.exe -ArgumentList '/a', "`"$msi`"", '/qn', "TARGETDIR=`"$target`"" -Wait -PassThru
           if ($p.ExitCode -ne 0) { throw "msiexec failed with exit code $($p.ExitCode)" }
           $gstRoot = (Get-ChildItem $target -Recurse -Filter 'libgstreamer-1.0-0.dll' | Select-Object -First 1).Directory.Parent
           if (-not $gstRoot) { throw "GStreamer runtime not found in extracted MSI" }
-          Move-Item $gstRoot.FullName deps/gstreamer64
+          "GST_ROOT=$($gstRoot.FullName)" >> $env:GITHUB_ENV
 
-          Remove-Item deps/tmp -Recurse -Force
-          Get-ChildItem deps/ffmpeg
-          Get-ChildItem deps/gstreamer64
+      - name: Trim GStreamer to required files
+        if: steps.libs-cache.outputs.cache-hit != 'true'
+        shell: python
+        run: |
+          # Copies the listed plugins, gst-plugin-scanner and the listed libraries together with all
+          # DLLs they import (resolved recursively from the PE import tables) and strips debug info.
+          import os, shutil, struct, subprocess
+
+          src, dst = os.environ['GST_ROOT'], os.path.join('deps', 'gstreamer64')
+          plugins = os.environ['GSTREAMER_PLUGINS'].split()
+          libs = os.environ['GSTREAMER_LIBS'].split()
+
+          def imports(path):
+              with open(path, 'rb') as f:
+                  data = f.read()
+              pe = struct.unpack_from('<I', data, 0x3C)[0]
+              sections, opt_size = struct.unpack_from('<H12xH', data, pe + 6)
+              opt = pe + 24
+              dirs = opt + (112 if struct.unpack_from('<H', data, opt)[0] == 0x20B else 96)
+              import_rva = struct.unpack_from('<I', data, dirs + 8)[0]
+              # VirtualSize, VirtualAddress, SizeOfRawData, PointerToRawData of each section
+              table = [struct.unpack_from('<IIII', data, opt + opt_size + i * 40 + 8)
+                       for i in range(sections)]
+
+              def offset(rva):
+                  for vsize, vaddr, rawsize, rawptr in table:
+                      if vaddr <= rva < vaddr + max(vsize, rawsize):
+                          return rva - vaddr + rawptr
+                  raise ValueError(f'{path}: RVA {rva:#x} outside all sections')
+
+              names, pos = [], offset(import_rva) if import_rva else None
+              while pos is not None:
+                  name_rva = struct.unpack_from('<I', data, pos + 12)[0]
+                  if not name_rva:
+                      break
+                  start = offset(name_rva)
+                  names.append(data[start:data.index(b'\0', start)].decode().lower())
+                  pos += 20
+              return names
+
+          bin_dir = os.path.join(src, 'bin')
+          available = {f.lower(): f for f in os.listdir(bin_dir)}
+          roots = [os.path.join(src, 'lib', 'gstreamer-1.0', f'libgst{p}.dll') for p in plugins]
+          roots.append(os.path.join(src, 'libexec', 'gstreamer-1.0', 'gst-plugin-scanner.exe'))
+          roots += [os.path.join(bin_dir, available[l.lower()]) for l in libs]
+
+          files, queue = set(), list(roots)
+          while queue:
+              path = queue.pop()
+              if path in files:
+                  continue
+              files.add(path)
+              queue += [os.path.join(bin_dir, available[d]) for d in imports(path) if d in available]
+
+          strip = shutil.which('llvm-strip') or r'C:\Program Files\LLVM\bin\llvm-strip.exe'
+          if not os.path.exists(strip):
+              strip = None
+              print('::warning::llvm-strip not found, GStreamer DLLs are copied with debug info')
+
+          total = 0
+          for path in sorted(files):
+              target = os.path.join(dst, os.path.relpath(path, src))
+              os.makedirs(os.path.dirname(target), exist_ok=True)
+              # llvm-strip cannot handle every MinGW DLL (e.g. libstdc++), those are copied as they are
+              if not strip or subprocess.run([strip, '--strip-debug', path, '-o', target]).returncode != 0:
+                  shutil.copy2(path, target)
+              total += os.path.getsize(target)
+              print(os.path.relpath(target, dst))
+          print(f'{len(files)} files, {total / 1e6:.1f} MB')
 
       - name: Copy FFmpeg and GStreamer libs to output
         shell: pwsh
