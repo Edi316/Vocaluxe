@@ -232,7 +232,7 @@ namespace Vocaluxe.Base
 
         public struct SConfigServer
         {
-            [DefaultValue(EOffOn.TR_CONFIG_OFF)]
+            [DefaultValue(EOffOn.TR_CONFIG_ON)]
             public EOffOn ServerActive;
             [DefaultValue(EOffOn.TR_CONFIG_OFF)]
             public EOffOn ServerEncryption;
