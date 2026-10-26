@@ -247,11 +247,11 @@ namespace Vocaluxe.Base.Web
         private static IList<int> _GetAudioModes(CSong song)
         {
             var modes = new List<int>();
-            if (song.HasInstrumental())
+            if (song.HasInstrumental)
             {
                 modes.Add((int)EAudioMode.TR_AUDIOMODE_NORMAL);
                 modes.Add((int)EAudioMode.TR_AUDIOMODE_INSTRUMENTAL);
-                if (song.HasVocals())
+                if (song.HasVocals)
                 {
                     modes.Add((int)EAudioMode.TR_AUDIOMODE_VOCALS);
                 }

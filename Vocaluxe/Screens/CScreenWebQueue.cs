@@ -366,11 +366,11 @@ namespace Vocaluxe.Screens
             }
 
             var audioModes = new List<EAudioMode>();
-            if (song != null && song.HasInstrumental())
+            if (song != null && song.HasInstrumental)
             {
                 audioModes.Add(EAudioMode.TR_AUDIOMODE_NORMAL);
                 audioModes.Add(EAudioMode.TR_AUDIOMODE_INSTRUMENTAL);
-                if (song.HasVocals())
+                if (song.HasVocals)
                 {
                     audioModes.Add(EAudioMode.TR_AUDIOMODE_VOCALS);
                 }

@@ -32,7 +32,7 @@ namespace Vocaluxe.Lib.Sound.Playback
         bool Loop { get; set; }
         float Volume { get; set; }
         float VolumeMax { get; set; }
-        float Length { get; }
+        float Duration { get; }
         float Position { get; set; }
         bool IsPaused { get; set; }
         bool IsFinished { get; }
