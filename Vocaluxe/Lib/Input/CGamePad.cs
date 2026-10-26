@@ -60,8 +60,8 @@ namespace Vocaluxe.Lib.Input
             new CRepeatingInput(Keys.Down, (s, was) => s.DPad.IsDown || _IsAxisPressed(-s.ThumbSticks.Left.Y, was)),
             new CRepeatingInput(Keys.Left, (s, was) => s.DPad.IsLeft || _IsAxisPressed(-s.ThumbSticks.Left.X, was)),
             new CRepeatingInput(Keys.Right, (s, was) => s.DPad.IsRight || _IsAxisPressed(s.ThumbSticks.Left.X, was)),
-            new CRepeatingInput(Keys.PageUp, (s, was) => _IsTriggerPressed(s.Triggers.Left, was)),
-            new CRepeatingInput(Keys.PageDown, (s, was) => _IsTriggerPressed(s.Triggers.Right, was))
+            new CRepeatingInput(Keys.PageUp, (s, was) => s.Buttons.LeftShoulder == ButtonState.Pressed || _IsTriggerPressed(s.Triggers.Left, was)),
+            new CRepeatingInput(Keys.PageDown, (s, was) => s.Buttons.RightShoulder == ButtonState.Pressed || _IsTriggerPressed(s.Triggers.Right, was))
         };
 
         private volatile int _GamePadIndex = -1;
@@ -434,10 +434,8 @@ namespace Vocaluxe.Lib.Input
 
         private void _HandleMouse(GamePadState state)
         {
-            var leftClick =
-                _IsNewlyPressed(state.Buttons.LeftShoulder, _OldState.Buttons.LeftShoulder) ||
-                _IsNewlyPressed(state.Buttons.RightStick, _OldState.Buttons.RightStick);
-            var rightClick = _IsNewlyPressed(state.Buttons.RightShoulder, _OldState.Buttons.RightShoulder);
+            var leftClick = _IsNewlyPressed(state.Buttons.RightStick, _OldState.Buttons.RightStick);
+            const bool rightClick = false;
 
             var elapsedSeconds = _MouseTimer.IsRunning ? Math.Min((float)_MouseTimer.Elapsed.TotalSeconds, MaxMouseStepSeconds) : 0.0f;
             _MouseTimer.Restart();
