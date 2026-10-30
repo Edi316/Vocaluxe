@@ -323,6 +323,21 @@ namespace Vocaluxe.Base
         }
 
         /// <summary>
+        ///     True if the renderer can take Yuv420P video frames and convert them to RGB on the GPU
+        /// </summary>
+        public static bool SupportsYuvVideo => _Draw != null && _Draw.SupportsYuvVideo;
+
+        /// <summary>
+        ///     Writes a video frame to the texture, creating or recreating it if required (null, other size or format)
+        /// </summary>
+        /// <param name="textureRef"></param>
+        /// <param name="frame"></param>
+        public static void UpdateVideoTexture(ref CTextureRef textureRef, in SVideoFrame frame)
+        {
+            _Draw.UpdateVideoTexture(ref textureRef, frame);
+        }
+
+        /// <summary>
         ///     Removes a texture from the VRAM and sets it to null to avoid accidential usage <br />
         ///     Note: You can also use its Dispose method to do the same as this gets automaticly called from the Dispose method and destructor of a texture reference
         /// </summary>

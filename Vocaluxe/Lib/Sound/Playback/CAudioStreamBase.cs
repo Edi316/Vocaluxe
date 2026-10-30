@@ -23,7 +23,6 @@ namespace Vocaluxe.Lib.Sound.Playback
 {
     abstract class CAudioStreamBase : IAudioStream
     {
-        protected readonly string _Medium;
         protected volatile bool _Loop;
         protected readonly EAudioEffect _Effect;
 
@@ -47,15 +46,14 @@ namespace Vocaluxe.Lib.Sound.Playback
 
         public virtual float Volume { get; set; }
         public virtual float VolumeMax { get; set; }
-        public virtual float Length { get; protected set; }
+        public virtual float Duration { get; protected set; }
         public abstract float Position { get; set; }
         public abstract bool IsPaused { get; set; }
         public abstract bool IsFinished { get; }
 
-        protected CAudioStreamBase(int id, string medium, bool loop, EAudioEffect effect = EAudioEffect.None)
+        protected CAudioStreamBase(int id, bool loop, EAudioEffect effect = EAudioEffect.None)
         {
             Id = id;
-            _Medium = medium;
             _Loop = loop;
             _Effect = effect;
         }
@@ -75,7 +73,7 @@ namespace Vocaluxe.Lib.Sound.Playback
         {
             if (!disposing)
             {
-                CLog.Debug("Audio stream " + _Medium + " was not closed.");
+                CLog.Debug("Audio stream was not closed.");
             }
         }
 

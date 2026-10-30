@@ -19,6 +19,7 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Threading.Tasks;
+using Vocaluxe.Lib.Sound.Sources;
 using VocaluxeLib;
 using VocaluxeLib.Draw;
 using VocaluxeLib.Songs;
@@ -143,7 +144,7 @@ namespace Vocaluxe.Base
 
         public static string ArtistAndTitle
         {
-            get { return _CurPlayer.ArtistAndTitle; }
+            get { return _CurPlayer.DisplayName; }
         }
 
         public static float Length
@@ -343,7 +344,7 @@ namespace Vocaluxe.Base
                 _PlayerBeforeEvent = _CurPlayer;
             }
 
-            _EventPlayer.Load(file);
+            _EventPlayer.Load(new CLocalFileSoundSource(file));
             if (!_EventPlayer.SoundLoaded)
             {
                 _CurPlayer = _PlayerBeforeEvent;
@@ -488,7 +489,7 @@ namespace Vocaluxe.Base
             Debug.Assert(_CurrentPlaylistElement != null);
 
             //If current song same as loaded restart only
-            if (_BGPlayer.SoundLoaded && _CurrentPlaylistElement.MusicFilePath == _BGPlayer.FilePath)
+            if (_BGPlayer.SoundSource != null && _BGPlayer.SoundSource.Equals(_CurrentPlaylistElement.SoundSource))
             {
                 _BGPlayer.Stop();
                 _BGPlayer.Play();
@@ -498,7 +499,7 @@ namespace Vocaluxe.Base
             //otherwhise load
             if (!_CurrentPlaylistElement.HasMetaData)
             {
-                _BGPlayer.Load(_CurrentPlaylistElement.MusicFilePath, 0f, true);
+                _BGPlayer.Load(_CurrentPlaylistElement.SoundSource, 0f, true);
             }
             else
             {

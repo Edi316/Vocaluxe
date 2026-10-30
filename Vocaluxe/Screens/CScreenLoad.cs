@@ -18,6 +18,8 @@
 using System;
 using System.Windows.Forms;
 using Vocaluxe.Base;
+using Vocaluxe.Lib;
+using Vocaluxe.Lib.FFmpeg;
 using VocaluxeLib;
 using VocaluxeLib.Log;
 using VocaluxeLib.Menu;
@@ -47,7 +49,7 @@ namespace Vocaluxe.Screens
         public override void Init()
         {
             base.Init();
-
+            FFmpegHelper.PrepareFFmpegBinaries();
             _ThemeTexts = new string[] { _TextStatus, _TextProgramName };
             _Intros = new CVideoPlayer[_IntroVideo.Length];
             for (var i = 0; i < _Intros.Length; i++)

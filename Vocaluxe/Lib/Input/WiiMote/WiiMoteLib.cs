@@ -216,7 +216,6 @@ namespace Vocaluxe.Lib.Input.WiiMote
             if (!CHIDApi.Init())
             {
                 CLog.Error("WiiMoteLib: Can't initialize HID API");
-                CLog.Error("Please install the Visual C++ Redistributable Packages 2008!");
 
                 _Error = true;
             }

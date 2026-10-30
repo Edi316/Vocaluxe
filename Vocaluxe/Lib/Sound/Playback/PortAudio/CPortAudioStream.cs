@@ -16,19 +16,19 @@
 #endregion
 
 using System;
-using System.Diagnostics;
 using System.IO;
 using System.Runtime.InteropServices;
 using System.Threading;
 using Vocaluxe.Base;
-using Vocaluxe.Lib.Sound.Playback.Decoder;
+using Vocaluxe.Lib.Sound.Playback.FFmpeg;
 using VocaluxeLib.Log;
 
 namespace Vocaluxe.Lib.Sound.Playback.PortAudio
 {
     class CPortAudioStream : CAudioStreamBase
     {
-        private const int _Bufsize = 1000000;
+        private readonly Stream _SourceStream;
+        private const int _BufferSize = 1000000;
         private const int _BeginRefill = 800000;
 
         private readonly CSyncTimer _SyncTimer = new CSyncTimer(0f, 1f, 0.02f);
@@ -40,14 +40,12 @@ namespace Vocaluxe.Lib.Sound.Playback.PortAudio
         private IntPtr _Stream = IntPtr.Zero;
 
         private PortAudioSharp.PortAudio.PaStreamCallbackDelegate _PaStreamCallback;
-        private IAudioDecoder _Decoder;
+        private CAudioDecoderFFmpeg _Decoder;
         private bool _DataSinceLoop;
         private bool _Looped;
         private float _BytesPerSecond;
         private float _Latency;
         private bool _NoMoreData;
-
-        private bool _FileOpened;
 
         private bool _Skip;
 
@@ -65,8 +63,8 @@ namespace Vocaluxe.Lib.Sound.Playback.PortAudio
 
         private AutoResetEvent _EventDecode = new AutoResetEvent(false);
 
-        private readonly Object _LockData = new Object();
-        private readonly Object _LockSyncSignals = new Object();
+        private readonly object _LockData = new();
+        private readonly object _LockSyncSignals = new();
 
         public override float Position
         {
@@ -77,14 +75,14 @@ namespace Vocaluxe.Lib.Sound.Playback.PortAudio
                     // Decoder may return wrong timestamps. This is why we use the synctimer
                     // If you change this do exessive testing for monoton timestamps espacially for ogg files
                     var time = Math.Max(0f, _SyncTimer.Time);
-                    if (time > Length)
+                    if (time > Duration)
                     {
                         if (!_Loop)
                         {
                             _SyncTimer.Pause();
                         }
 
-                        time = Length;
+                        time = Duration;
                     }
 
                     return time;
@@ -103,7 +101,7 @@ namespace Vocaluxe.Lib.Sound.Playback.PortAudio
 
         public override bool IsPaused
         {
-            get { return _Paused; }
+            get => _Paused;
             set
             {
                 if (_Paused == value)
@@ -111,7 +109,7 @@ namespace Vocaluxe.Lib.Sound.Playback.PortAudio
                     return;
                 }
 
-                if (!_FileOpened || _Terminated)
+                if (_Decoder == null || _Terminated)
                 {
                     return;
                 }
@@ -140,24 +138,20 @@ namespace Vocaluxe.Lib.Sound.Playback.PortAudio
             {
                 lock (_LockData)
                 {
-                    return _NoMoreData && _Data.BytesNotRead == 0 && _SyncTimer.Time >= Length;
+                    return _NoMoreData && _Data.BytesNotRead == 0 && _SyncTimer.Time >= Duration;
                 }
             }
         }
 
-        public CPortAudioStream(int id, string medium, bool loop, EAudioEffect effect = EAudioEffect.None) : base(id, medium, loop, effect) { }
+        public CPortAudioStream(int id, Stream sourceStream, bool loop, EAudioEffect effect = EAudioEffect.None) : base(id, loop, effect)
+        {
+            _SourceStream = sourceStream;
+        }
 
         public override bool Open(bool prescan)
         {
-            Debug.Assert(!_FileOpened);
-            if (_FileOpened)
+            if (_Decoder != null)
             {
-                return false;
-            }
-
-            if (!File.Exists(_Medium))
-            {
-                Dispose();
                 return false;
             }
 
@@ -183,30 +177,29 @@ namespace Vocaluxe.Lib.Sound.Playback.PortAudio
             }
 
             _Decoder = new CAudioDecoderFFmpeg();
-            if (!_Decoder.Open(_Medium))
+            if (!_Decoder.Open(_SourceStream))
             {
                 Dispose();
-                CLog.Error("Error opening audio file: " + _Medium);
+                CLog.Error("Error opening audio stream");
                 return false;
             }
 
-            var format = _Decoder.GetFormatInfo();
-            if (format.SamplesPerSecond == 0)
+            if (_Decoder.SampleRate == 0)
             {
                 Dispose();
                 CLog.Error("Error Init PortAudio Playback (samples=0)");
                 return false;
             }
 
-            Length = _Decoder.GetLength();
-            _ByteCount = 2 * format.ChannelCount;
-            _BytesPerSecond = format.SamplesPerSecond * _ByteCount;
+            Duration = (float)_Decoder.Duration.TotalSeconds;
+            _ByteCount = 2 * _Decoder.ChannelCount;
+            _BytesPerSecond = _Decoder.SampleRate * _ByteCount;
             _SyncTimer.Pause();
             _SyncTimer.Time = 0f;
 
             PortAudioSharp.PortAudio.PaStreamParameters? outputParams = new PortAudioSharp.PortAudio.PaStreamParameters
             {
-                channelCount = format.ChannelCount,
+                channelCount = _Decoder.ChannelCount,
                 device = _ApiInfo.defaultOutputDevice,
                 sampleFormat = PortAudioSharp.PortAudio.PaSampleFormat.paInt16,
                 suggestedLatency = _OutputDeviceInfo.defaultLowOutputLatency,
@@ -216,7 +209,7 @@ namespace Vocaluxe.Lib.Sound.Playback.PortAudio
             if (!_PaHandle.OpenOutputStream(
                     out _Stream,
                     ref outputParams,
-                    format.SamplesPerSecond,
+                    _Decoder.SampleRate,
                     (uint)CConfig.Config.Sound.AudioBufferSize / 2,
                     PortAudioSharp.PortAudio.PaStreamFlags.paNoFlag,
                     _PaStreamCallback,
@@ -231,10 +224,9 @@ namespace Vocaluxe.Lib.Sound.Playback.PortAudio
             //From now on closing the driver and the decoder is handled by the thread ONLY!
 
             _Paused = true;
-            _FileOpened = true;
-            _Data = new CRingBuffer(_Bufsize);
+            _Data = new CRingBuffer(_BufferSize);
             _NoMoreData = false;
-            _DecoderThread = new Thread(_Execute) { Priority = ThreadPriority.Normal, Name = Path.GetFileName(_Medium) };
+            _DecoderThread = new Thread(_Execute) { Priority = ThreadPriority.Normal, Name = $"{nameof(CPortAudioStream)} thread" };
             _DecoderThread.Start();
 
             return true;
@@ -259,7 +251,7 @@ namespace Vocaluxe.Lib.Sound.Playback.PortAudio
 
         public override void Play()
         {
-            if (!_FileOpened || _Terminated || !IsPaused)
+            if (_Decoder == null || _Terminated || !IsPaused)
             {
                 return;
             }
@@ -269,7 +261,7 @@ namespace Vocaluxe.Lib.Sound.Playback.PortAudio
 
         public override void Stop()
         {
-            if (!_FileOpened || _Terminated)
+            if (_Decoder == null || _Terminated)
             {
                 return;
             }
@@ -295,16 +287,15 @@ namespace Vocaluxe.Lib.Sound.Playback.PortAudio
         {
             if (!_Looped)
             {
-                CLog.Information("Looping audio file: " + _Medium);
+                CLog.Information("Looping audio stream: " + Id);
                 _Looped = true;
             }
 
             _DataSinceLoop = false;
 
-            _Decoder.Close();
-            if (!_Decoder.Open(_Medium))
+            if (!_Decoder.SetPosition(0f))
             {
-                CLog.Error("Could not reopen audio file for looping: " + _Medium);
+                CLog.Error("Could not rewind audio stream for looping: " + Id);
                 lock (_LockData)
                 {
                     _NoMoreData = true;
@@ -347,9 +338,6 @@ namespace Vocaluxe.Lib.Sound.Playback.PortAudio
                 return;
             }
 
-            float timecode;
-            byte[] buffer;
-
             lock (_LockData)
             {
                 if (_Data.BytesNotRead > _BeginRefill)
@@ -358,8 +346,7 @@ namespace Vocaluxe.Lib.Sound.Playback.PortAudio
                 }
             }
 
-            _Decoder.Decode(out buffer, out timecode);
-
+            _Decoder.Decode(out var buffer, out var timeCode);
             if (buffer == null)
             {
                 if (_Loop && _DataSinceLoop)
@@ -370,7 +357,7 @@ namespace Vocaluxe.Lib.Sound.Playback.PortAudio
                 {
                     if (_Loop)
                     {
-                        CLog.Warning("Could not loop audio file, no data decoded since (re)opening: " + _Medium);
+                        CLog.Warning("Could not loop audio stream, no data decoded since rewinding: " + Id);
                     }
 
                     _NoMoreData = true;
@@ -387,7 +374,7 @@ namespace Vocaluxe.Lib.Sound.Playback.PortAudio
             lock (_LockData)
             {
                 _Data.Write(buffer);
-                _TimeCode = timecode;
+                _TimeCode = timeCode;
                 if (_Data.BytesNotRead < _BeginRefill)
                 {
                     _EventDecode.Set();
@@ -434,6 +421,8 @@ namespace Vocaluxe.Lib.Sound.Playback.PortAudio
             {
                 _CloseStreamListener.OnCloseStream(this);
             }
+
+            _SourceStream?.Dispose();
         }
         #endregion Threading
 
@@ -481,14 +470,14 @@ namespace Vocaluxe.Lib.Sound.Playback.PortAudio
 
                     var latency = buf.Length / _BytesPerSecond + _Latency;
                     var time = _TimeCode - _Data.BytesNotRead / _BytesPerSecond - latency;
-                    if (_Loop && Length > 0f)
+                    if (_Loop && Duration > 0f)
                     {
                         if (time < 0f)
                         {
-                            time += Length;
+                            time += Duration;
                         }
 
-                        if (time < _SyncTimer.Time - Length / 2f)
+                        if (time < _SyncTimer.Time - Duration / 2f)
                         {
                             _SyncTimer.Time = time;
                         }

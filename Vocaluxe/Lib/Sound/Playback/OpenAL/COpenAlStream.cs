@@ -21,32 +21,30 @@ using System.IO;
 using System.Threading;
 using OpenTK.Audio;
 using Vocaluxe.Base;
-using Vocaluxe.Lib.Sound.Playback.Decoder;
+using Vocaluxe.Lib.Sound.Playback.FFmpeg;
 using VocaluxeLib.Log;
 
 namespace Vocaluxe.Lib.Sound.Playback.OpenAL
 {
     class COpenAlStream : CAudioStreamBase
     {
+        private readonly Stream _SourceStream;
         private const int _BufferCount = 5;
-        private const int _Bufsize = 500000;
+        private const int _BufferSize = 500000;
         private const int _BeginRefill = 50000;
 
         private int[] _Buffers;
         private byte[] _SampleBuf;
         private int _Source;
-        private SFormatInfo _Format;
 
         private readonly Stopwatch _Timer = new Stopwatch();
 
-        private IAudioDecoder _Decoder;
+        private CAudioDecoderFFmpeg _Decoder;
         private bool _DataSinceLoop;
         private bool _Looped;
         private int _ByteCount;
         private float _BytesPerSecond;
         private bool _NoMoreData;
-
-        private bool _FileOpened;
 
         private bool _Skip;
 
@@ -74,7 +72,7 @@ namespace Vocaluxe.Lib.Sound.Playback.OpenAL
             {
                 lock (_MutexData)
                 {
-                    return _NoMoreData && _Data.BytesNotRead == 0 && Position >= Length;
+                    return _NoMoreData && _Data.BytesNotRead == 0 && Position >= Duration;
                 }
             }
         }
@@ -84,14 +82,14 @@ namespace Vocaluxe.Lib.Sound.Playback.OpenAL
             get
             {
                 var time = _CurrentTime + _Timer.ElapsedMilliseconds / 1000f;
-                if (time > Length)
+                if (time > Duration)
                 {
                     if (!_Loop)
                     {
                         _Timer.Stop();
                     }
 
-                    time = Length;
+                    time = Duration;
                 }
 
                 return time;
@@ -113,7 +111,7 @@ namespace Vocaluxe.Lib.Sound.Playback.OpenAL
 
         public override bool IsPaused
         {
-            get { return _Paused; }
+            get => _Paused;
             set
             {
                 _Paused = value;
@@ -131,7 +129,10 @@ namespace Vocaluxe.Lib.Sound.Playback.OpenAL
             }
         }
 
-        public COpenAlStream(int id, string medium, bool loop, EAudioEffect effect = EAudioEffect.None) : base(id, medium, loop, effect) { }
+        public COpenAlStream(int id, Stream sourceStream, bool loop, EAudioEffect effect = EAudioEffect.None) : base(id, loop, effect)
+        {
+            _SourceStream = sourceStream;
+        }
 
         protected override void _Dispose(bool disposing)
         {
@@ -163,15 +164,8 @@ namespace Vocaluxe.Lib.Sound.Playback.OpenAL
 
         public override bool Open(bool prescan)
         {
-            Debug.Assert(!_FileOpened);
-            if (_FileOpened)
+            if (_Decoder != null)
             {
-                return false;
-            }
-
-            if (!File.Exists(_Medium))
-            {
-                Dispose();
                 return false;
             }
 
@@ -198,40 +192,36 @@ namespace Vocaluxe.Lib.Sound.Playback.OpenAL
                 return false;
             }
 
-
             _Decoder = new CAudioDecoderFFmpeg();
-            if (!_Decoder.Open(_Medium))
+            if (!_Decoder.Open(_SourceStream))
             {
                 Dispose();
-                CLog.Error("Error opening audio file: " + _Medium);
+                CLog.Error("Error opening audio stream");
                 return false;
             }
 
-            _Format = _Decoder.GetFormatInfo();
-            if (_Format.SamplesPerSecond == 0)
+            if (_Decoder.SampleRate == 0)
             {
                 Dispose();
                 CLog.Error("Error Init OpenAL Playback (samples=0)");
                 return false;
             }
 
-            Length = _Decoder.GetLength();
+            Duration = (float)_Decoder.Duration.TotalSeconds;
 
-            _ByteCount = 2 * _Format.ChannelCount;
-            _BytesPerSecond = _Format.SamplesPerSecond * _ByteCount;
+            _ByteCount = 2 * _Decoder.ChannelCount;
+            _BytesPerSecond = _Decoder.SampleRate * _ByteCount;
 
             _CurrentTime = 0f;
             _TimeCode = 0f;
             _Timer.Reset();
-            _Data = new CRingBuffer(_Bufsize);
+            _Data = new CRingBuffer(_BufferSize);
             _NoMoreData = false;
             _SampleBuf = new byte[(int)CConfig.Config.Sound.AudioBufferSize];
             //From now on closing the driver and the decoder is handled by the thread ONLY!
 
-            _DecoderThread = new Thread(_Execute) { Priority = ThreadPriority.Normal, Name = Path.GetFileName(_Medium) };
+            _DecoderThread = new Thread(_Execute) { Priority = ThreadPriority.Normal, Name = $"{nameof(COpenAlStream)} thread" };
             _DecoderThread.Start();
-
-            _FileOpened = true;
             return true;
         }
 
@@ -252,16 +242,15 @@ namespace Vocaluxe.Lib.Sound.Playback.OpenAL
         {
             if (!_Looped)
             {
-                CLog.Information("Looping audio file: " + _Medium);
+                CLog.Information("Looping audio stream: " + Id);
                 _Looped = true;
             }
 
             _DataSinceLoop = false;
 
-            _Decoder.Close();
-            if (!_Decoder.Open(_Medium))
+            if (!_Decoder.SetPosition(0f))
             {
-                CLog.Error("Could not reopen audio file for looping: " + _Medium);
+                CLog.Error("Could not rewind audio stream for looping: " + Id);
                 lock (_MutexData)
                 {
                     _NoMoreData = true;
@@ -304,9 +293,6 @@ namespace Vocaluxe.Lib.Sound.Playback.OpenAL
                 return;
             }
 
-            float timecode;
-            byte[] buffer;
-
             lock (_MutexData)
             {
                 if (_Data.BytesNotRead > _BeginRefill)
@@ -315,8 +301,7 @@ namespace Vocaluxe.Lib.Sound.Playback.OpenAL
                 }
             }
 
-            _Decoder.Decode(out buffer, out timecode);
-
+            _Decoder.Decode(out var buffer, out var timecode);
             if (buffer == null)
             {
                 if (_Loop && _DataSinceLoop)
@@ -327,7 +312,7 @@ namespace Vocaluxe.Lib.Sound.Playback.OpenAL
                 {
                     if (_Loop)
                     {
-                        CLog.Warning("Could not loop audio file, no data decoded since (re)opening: " + _Medium);
+                        CLog.Warning("Could not loop audio stream, no data decoded since rewinding: " + Id);
                     }
 
                     _NoMoreData = true;
@@ -390,10 +375,8 @@ namespace Vocaluxe.Lib.Sound.Playback.OpenAL
                 _EventDecode = null;
             }
 
-            if (_CloseStreamListener != null)
-            {
-                _CloseStreamListener.OnCloseStream(this);
-            }
+            _CloseStreamListener?.OnCloseStream(this);
+            _SourceStream?.Dispose();
         }
         #endregion Threading
 
@@ -406,16 +389,14 @@ namespace Vocaluxe.Lib.Sound.Playback.OpenAL
                 return;
             }
 
-            int queuedCount;
             var useQueuedBuffer = false;
-            AL.GetSource(_Source, ALGetSourcei.BuffersQueued, out queuedCount);
+            AL.GetSource(_Source, ALGetSourcei.BuffersQueued, out var queuedCount);
 
             var freeBufferCt = _BufferCount;
             if (queuedCount > 0)
             {
                 AL.GetSource(_Source, ALGetSourcei.BuffersProcessed, out freeBufferCt);
                 useQueuedBuffer = true;
-                //Console.WriteLine("Buffers Processed on Stream " + _Source + " = " + processedCount);
                 if (freeBufferCt < 1)
                 {
                     return;
@@ -449,8 +430,8 @@ namespace Vocaluxe.Lib.Sound.Playback.OpenAL
 
                     if (buffer != 0)
                     {
-                        var alFormat = _Format.ChannelCount == 2 ? ALFormat.Stereo16 : ALFormat.Mono16;
-                        AL.BufferData(buffer, alFormat, _SampleBuf, _SampleBuf.Length, _Format.SamplesPerSecond);
+                        var alFormat = _Decoder.ChannelCount == 2 ? ALFormat.Stereo16 : ALFormat.Mono16;
+                        AL.BufferData(buffer, alFormat, _SampleBuf, _SampleBuf.Length, _Decoder.SampleRate);
                         AL.SourceQueueBuffer(_Source, buffer);
                     }
 
@@ -470,9 +451,9 @@ namespace Vocaluxe.Lib.Sound.Playback.OpenAL
 
             var latency = CConfig.Config.Sound.AudioLatency / 1000f + queuedCount * _SampleBuf.Length / _BytesPerSecond + 0.1f;
             _CurrentTime = _TimeCode - _Data.BytesNotRead / _BytesPerSecond - latency;
-            if (_Loop && _CurrentTime < 0f && Length > 0f)
+            if (_Loop && _CurrentTime < 0f && Duration > 0f)
             {
-                _CurrentTime += Length;
+                _CurrentTime += Duration;
             }
 
             _Timer.Restart();

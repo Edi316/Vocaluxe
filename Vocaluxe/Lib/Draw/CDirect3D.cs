@@ -63,7 +63,20 @@ namespace Vocaluxe.Lib.Draw
 
     class CD3DTexture : CTextureBase
     {
-        public readonly IDirect3DTexture9 D3DTexture;
+        private readonly IDirect3DDevice9 _Device;
+        private readonly bool _DefaultPool;
+
+        public IDirect3DTexture9 D3DTexture { get; private set; }
+
+        /// <summary>
+        ///     Y-, U- und V-Ebene (L8) bei Yuv420P-Videotexturen, sonst null
+        /// </summary>
+        public IDirect3DTexture9[] Planes { get; private set; }
+
+        /// <summary>
+        ///     True, wenn die Textur im Default-Pool liegt und bei einem Device-Reset neu erzeugt werden muss
+        /// </summary>
+        public bool IsDefaultPool => _DefaultPool;
 
         public CD3DTexture(IDirect3DDevice9 device, Size dataSize, int texWidth = 0, int texHeight = 0) : base(dataSize, new Size(texWidth, texHeight))
         {
@@ -72,6 +85,84 @@ namespace Vocaluxe.Lib.Draw
             var levels = noMips ? 1 : 0;
 
             D3DTexture = device?.CreateTexture(texWidth, texHeight, levels, usage, Format.A8R8G8B8, Pool.Managed);
+        }
+
+        /// <summary>
+        ///     Erzeugt eine Videotextur.
+        ///     Bgra: dynamische Textur (Lock mit Discard, keine Kopie im Systemspeicher).
+        ///     Yuv420P: Render-Target, das per Pixelshader aus drei dynamischen L8-Ebenen befuellt wird.
+        /// </summary>
+        public CD3DTexture(IDirect3DDevice9 device, Size dataSize, Size textureSize, EVideoFrameFormat format, bool defaultPool) : base(dataSize, textureSize)
+        {
+            _Device = device;
+            _DefaultPool = defaultPool || format == EVideoFrameFormat.Yuv420P;
+            VideoFormat = format;
+            CreateVideoResources();
+        }
+
+        public void CreateVideoResources()
+        {
+            if (VideoFormat == null || D3DTexture != null)
+            {
+                return;
+            }
+
+            if (VideoFormat == EVideoFrameFormat.Bgra)
+            {
+                D3DTexture = _DefaultPool
+                    ? _Device.CreateTexture(Size.Width, Size.Height, 1, Usage.Dynamic, Format.A8R8G8B8, Pool.Default)
+                    : _Device.CreateTexture(Size.Width, Size.Height, 1, Usage.None, Format.A8R8G8B8, Pool.Managed);
+                return;
+            }
+
+            D3DTexture = _Device.CreateTexture(Size.Width, Size.Height, 1, Usage.RenderTarget, Format.A8R8G8B8, Pool.Default);
+            try
+            {
+                using (var surface = D3DTexture.GetSurfaceLevel(0))
+                {
+                    _Device.ColorFill(surface, null, unchecked((int)0xFF000000));
+                }
+            }
+            catch (Exception)
+            {
+                // Only cosmetic (black instead of undefined content until the first frame)
+            }
+
+            var chromaWidth = (DataSize.Width + 1) / 2;
+            var chromaHeight = (DataSize.Height + 1) / 2;
+            Planes = new[]
+            {
+                _Device.CreateTexture(DataSize.Width, DataSize.Height, 1, Usage.Dynamic, Format.L8, Pool.Default),
+                _Device.CreateTexture(chromaWidth, chromaHeight, 1, Usage.Dynamic, Format.L8, Pool.Default),
+                _Device.CreateTexture(chromaWidth, chromaHeight, 1, Usage.Dynamic, Format.L8, Pool.Default)
+            };
+        }
+
+        /// <summary>
+        ///     Gibt die Ressourcen im Default-Pool frei (vor einem Device-Reset)
+        /// </summary>
+        public void ReleaseVideoResources()
+        {
+            if (!_DefaultPool)
+            {
+                return;
+            }
+
+            if (Planes != null)
+            {
+                foreach (var plane in Planes)
+                {
+                    plane.Dispose();
+                }
+
+                Planes = null;
+            }
+
+            if (D3DTexture != null)
+            {
+                D3DTexture.Dispose();
+                D3DTexture = null;
+            }
         }
 
         public override bool IsLoaded
@@ -87,9 +178,20 @@ namespace Vocaluxe.Lib.Draw
             }
 
             base.Dispose();
+            if (Planes != null)
+            {
+                foreach (var plane in Planes)
+                {
+                    plane.Dispose();
+                }
+
+                Planes = null;
+            }
+
             if (D3DTexture != null)
             {
                 D3DTexture.Dispose();
+                D3DTexture = null;
             }
         }
     }
@@ -111,6 +213,28 @@ namespace Vocaluxe.Lib.Draw
         private readonly Queue<STexturedColoredVertex> _Vertices = new Queue<STexturedColoredVertex>();
         private readonly Queue<IDirect3DTexture9> _VerticesTextures = new Queue<IDirect3DTexture9>();
         private readonly Queue<Matrix4x4> _VerticesRotationMatrices = new Queue<Matrix4x4>();
+
+        // Videotexturen im Default-Pool, die bei einem Device-Reset freigegeben und neu erzeugt werden muessen
+        private readonly List<CD3DTexture> _VideoTextures = new List<CD3DTexture>();
+        private IDirect3DPixelShader9 _YuvShader;
+        private bool _DynamicTextures;
+        // YUV-Umrechnungen, die vor dem naechsten Frame ausgefuehrt werden (Textur -> Farbmatrix)
+        private readonly Dictionary<CD3DTexture, float[]> _PendingYuvConversions = new Dictionary<CD3DTexture, float[]>();
+        private bool _VideoErrorLogged;
+
+        private const string _YuvShaderSource = @"
+sampler2D texY : register(s0);
+sampler2D texU : register(s1);
+sampler2D texV : register(s2);
+float4 rowR : register(c0);
+float4 rowG : register(c1);
+float4 rowB : register(c2);
+
+float4 main(float2 uv : TEXCOORD0) : COLOR0
+{
+    float4 yuv = float4(tex2D(texY, uv).r, tex2D(texU, uv).r, tex2D(texV, uv).r, 1.0);
+    return float4(saturate(dot(rowR, yuv)), saturate(dot(rowG, yuv)), saturate(dot(rowB, yuv)), 1.0);
+}";
 
         /// <summary>
         ///     Creates a new Instance of the CDirect3D Class
@@ -303,6 +427,7 @@ namespace Vocaluxe.Lib.Draw
             }
 
             _InitDevice();
+            _InitVideo();
 
             //This creates a new white texture and adds it to the texture pool
             //This texture is used for the DrawRect method
@@ -347,6 +472,16 @@ namespace Vocaluxe.Lib.Draw
             _Device.SetSamplerState(0, SamplerState.AddressU, (int)TextureAddress.Clamp);
             _Device.SetSamplerState(0, SamplerState.AddressV, (int)TextureAddress.Clamp);
 
+            //Sampler 1 und 2 werden nur fuer die U- und V-Ebene von Videos genutzt
+            for (var sampler = 1; sampler <= 2; sampler++)
+            {
+                _Device.SetSamplerState(sampler, SamplerState.MinFilter, (int)TextureFilter.Linear);
+                _Device.SetSamplerState(sampler, SamplerState.MagFilter, (int)TextureFilter.Linear);
+                _Device.SetSamplerState(sampler, SamplerState.MipFilter, (int)TextureFilter.None);
+                _Device.SetSamplerState(sampler, SamplerState.AddressU, (int)TextureAddress.Clamp);
+                _Device.SetSamplerState(sampler, SamplerState.AddressV, (int)TextureAddress.Clamp);
+            }
+
             _Device.SetTextureStageState(0, TextureStage.AlphaArg1, (int)TextureArgument.Texture);
             _Device.SetTextureStageState(0, TextureStage.AlphaArg2, (int)TextureArgument.Diffuse);
             _Device.SetTextureStageState(0, TextureStage.AlphaOperation, (int)TextureOperation.Modulate);
@@ -369,6 +504,8 @@ namespace Vocaluxe.Lib.Draw
 
         protected override void _OnBeforeDraw()
         {
+            _ConvertPendingYuvTextures();
+
             try
             {
                 _Device.BeginScene();
@@ -432,6 +569,14 @@ namespace Vocaluxe.Lib.Draw
         {
             //Dispose all objects in the default pool, those need to be recreated
             _DisposeDeviceResources();
+            _VideoTextures.RemoveAll(t => t.IsDisposed);
+            foreach (var texture in _VideoTextures)
+            {
+                texture.ReleaseVideoResources();
+            }
+
+            _PendingYuvConversions.Clear();
+
             try
             {
                 _Device.Reset(ref _PresentParameters);
@@ -443,6 +588,20 @@ namespace Vocaluxe.Lib.Draw
             {
                 CLog.Error(e, "Failed to reset the device");
                 _DisposeDeviceResources();
+                return;
+            }
+
+            //Video textures get their content with the next frame
+            foreach (var texture in _VideoTextures)
+            {
+                try
+                {
+                    texture.CreateVideoResources();
+                }
+                catch (Exception e)
+                {
+                    CLog.Error(e, "Failed to recreate video texture after device reset");
+                }
             }
         }
 
@@ -485,6 +644,10 @@ namespace Vocaluxe.Lib.Draw
         public override void Close()
         {
             base.Close();
+            _VideoTextures.Clear();
+            _PendingYuvConversions.Clear();
+            _YuvShader?.Dispose();
+            _YuvShader = null;
             _DisposeDeviceResources();
             _Device?.Dispose();
             _D3D?.Dispose();
@@ -820,6 +983,256 @@ namespace Vocaluxe.Lib.Draw
             }
             finally { texture.D3DTexture.UnlockRect(0); }
         }
+
+        #region video
+        /// <summary>
+        ///     Prueft, welche Videopfade die Grafikkarte unterstuetzt und kompiliert den YUV-Pixelshader
+        /// </summary>
+        private void _InitVideo()
+        {
+            const int adapter = 0;
+            var caps = _D3D.GetDeviceCaps(adapter, DeviceType.Hardware);
+            var adapterFormat = _D3D.GetAdapterDisplayMode(adapter).Format;
+
+            _DynamicTextures = (caps.Caps2 & Caps2.DynamicTextures) != 0 &&
+                               _D3D.CheckDeviceFormat(adapter, DeviceType.Hardware, adapterFormat, (int)Usage.Dynamic, ResourceType.Texture, Format.A8R8G8B8).Success;
+
+            if (CConfig.Config.FFmpeg.GpuColorConversion != EOffOn.TR_CONFIG_ON)
+            {
+                CLog.Information("[Direct3D] GPU color conversion for videos disabled by config");
+                return;
+            }
+
+            var yuvSupported = _DynamicTextures && _NonPowerOf2TextureSupported && _GetPixelShaderVersion(caps) >= 0x0200 &&
+                               _D3D.CheckDeviceFormat(adapter, DeviceType.Hardware, adapterFormat, (int)Usage.Dynamic, ResourceType.Texture, Format.L8).Success &&
+                               _D3D.CheckDeviceFormat(adapter, DeviceType.Hardware, adapterFormat, (int)Usage.RenderTarget, ResourceType.Texture, Format.A8R8G8B8).Success;
+            if (!yuvSupported)
+            {
+                CLog.Information("[Direct3D] Device does not support GPU color conversion for videos, using CPU conversion");
+                return;
+            }
+
+            try
+            {
+                var bytecode = Vortice.D3DCompiler.Compiler.Compile(_YuvShaderSource, "main", "YuvToRgb", "ps_2_0", Vortice.D3DCompiler.ShaderFlags.None, Vortice.D3DCompiler.EffectFlags.None);
+                _YuvShader = _Device.CreatePixelShader(bytecode.Span);
+            }
+            catch (Exception e)
+            {
+                CLog.Error(e, "[Direct3D] Unable to compile the YUV pixel shader, using CPU conversion for videos");
+                _YuvShader = null;
+            }
+        }
+
+        /// <summary>
+        ///     Pixelshader-Version als 0xMMmm (Major/Minor). Vortice stellt das Feld nicht oeffentlich bereit.
+        ///     Ist es nicht lesbar, wird 2.0 angenommen und ein Fehler beim Erzeugen des Shaders faellt auf die CPU zurueck.
+        /// </summary>
+        private static int _GetPixelShaderVersion(Capabilities caps)
+        {
+            var field = typeof(Capabilities).GetField("PixelShaderVersion_", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Public);
+            switch (field?.GetValue(caps))
+            {
+                case int version:
+                    return version & 0xFFFF;
+                case uint version:
+                    return (int)(version & 0xFFFF);
+                default:
+                    return 0x0200;
+            }
+        }
+
+        public override bool SupportsYuvVideo => _YuvShader != null;
+
+        protected override CD3DTexture _CreateVideoTexture(Size size, EVideoFrameFormat format)
+        {
+            var textureSize = format == EVideoFrameFormat.Yuv420P
+                ? size
+                : new Size(_CheckForNextPowerOf2(size.Width), _CheckForNextPowerOf2(size.Height));
+            var texture = new CD3DTexture(_Device, size, textureSize, format, _DynamicTextures);
+            if (texture.IsDefaultPool)
+            {
+                _VideoTextures.RemoveAll(t => t.IsDisposed);
+                _VideoTextures.Add(texture);
+            }
+
+            return texture;
+        }
+
+        protected override void _WriteVideoFrameToTexture(CD3DTexture texture, in SVideoFrame frame)
+        {
+            if (!texture.IsLoaded)
+            {
+                return; // Device was lost and resources could not be recreated yet
+            }
+
+            try
+            {
+                if (frame.Format == EVideoFrameFormat.Bgra)
+                {
+                    _WritePlane(texture.D3DTexture, frame, 0, !texture.Size.Equals(texture.DataSize));
+                    return;
+                }
+
+                for (var i = 0; i < 3; i++)
+                {
+                    _WritePlane(texture.Planes[i], frame, i, false);
+                }
+
+                // Die Umrechnung (Wechsel des Render-Targets) erfolgt erst vor dem naechsten Frame. Mitten in einem Frame
+                // verlieren manche D3D9-Treiber (z.B. in VMs) dabei den Inhalt des Backbuffers im Bereich der Textur.
+                _PendingYuvConversions[texture] = CVideoFrameHelper.GetYuvToRgbRows(frame.ColorMatrix, frame.FullRange);
+            }
+            catch (Exception e)
+            {
+                // Can happen while the device is lost, the texture is updated again with the next frame
+                if (!_VideoErrorLogged)
+                {
+                    CLog.Error(e, "[Direct3D] Failed to update video texture");
+                    _VideoErrorLogged = true;
+                }
+            }
+        }
+
+        private static void _WritePlane(IDirect3DTexture9 target, in SVideoFrame frame, int plane, bool clear)
+        {
+            var rect = target.LockRect(0, LockFlags.Discard);
+            try
+            {
+                var dst = rect.DataPointer;
+                if (clear)
+                {
+                    // Textur ist groesser als das Video (Pow2): Rest einmal leeren, damit beim Filtern kein Muell an den Raendern auftaucht
+                    var description = target.GetLevelDesc(0);
+                    var size = (long)rect.Pitch * description.Height;
+                    unsafe
+                    {
+                        var p = (byte*)dst;
+                        for (long i = 0; i < size; i++)
+                        {
+                            p[i] = 0;
+                        }
+                    }
+                }
+
+                CVideoFrameHelper.CopyPlane(frame.GetPlane(plane), frame.GetStride(plane), dst, rect.Pitch, frame.GetPlaneRowBytes(plane), frame.GetPlaneHeight(plane));
+            }
+            finally
+            {
+                target.UnlockRect(0);
+            }
+        }
+
+        /// <summary>
+        ///     Rechnet alle seit dem letzten Frame hochgeladenen YUV-Ebenen per Pixelshader in ihre RGB-Texturen um
+        ///     (Render-to-Texture). Laeuft vor dem Frame in einer eigenen Szene, damit der Wechsel des Render-Targets
+        ///     nichts beeinflusst, was bereits in den Backbuffer gezeichnet wurde.
+        /// </summary>
+        private void _ConvertPendingYuvTextures()
+        {
+            if (_PendingYuvConversions.Count == 0)
+            {
+                return;
+            }
+
+            try
+            {
+                _Device.BeginScene();
+                var viewport = _Device.Viewport;
+                try
+                {
+                    using (var oldTarget = _Device.GetRenderTarget(0))
+                    {
+                        try
+                        {
+                            _Device.SetRenderState(RenderState.AlphaBlendEnable, false);
+                            _Device.PixelShader = _YuvShader;
+                            _Device.VertexFormat = VertexFormat.PositionRhw | VertexFormat.Texture1;
+                            foreach (var conversion in _PendingYuvConversions)
+                            {
+                                var texture = conversion.Key;
+                                if (!texture.IsDisposed && texture.IsLoaded && texture.Planes != null)
+                                {
+                                    _ConvertYuvToTexture(texture, conversion.Value);
+                                }
+                            }
+                        }
+                        finally
+                        {
+                            _Device.SetRenderTarget(0, oldTarget);
+                        }
+                    }
+                }
+                finally
+                {
+                    // Restore the state used by the normal drawing code
+                    _Device.PixelShader = null;
+                    _Device.SetTexture(0, null);
+                    _Device.SetTexture(1, null);
+                    _Device.SetTexture(2, null);
+                    _Device.SetRenderState(RenderState.AlphaBlendEnable, true);
+                    _Device.VertexDeclaration = STexturedColoredVertex.GetDeclaration(_Device);
+                    _Device.SetStreamSource(0, _VertexBuffer, 0, Marshal.SizeOf(typeof(STexturedColoredVertex)));
+                    _Device.Viewport = viewport;
+                    _Device.EndScene();
+                }
+            }
+            catch (Exception e)
+            {
+                // Can happen while the device is lost, the textures are updated again with the next video frame
+                if (!_VideoErrorLogged)
+                {
+                    CLog.Error(e, "[Direct3D] Failed to convert video frames");
+                    _VideoErrorLogged = true;
+                }
+            }
+            finally
+            {
+                _PendingYuvConversions.Clear();
+            }
+        }
+
+        private unsafe void _ConvertYuvToTexture(CD3DTexture texture, float[] colorRows)
+        {
+            var w = texture.DataSize.Width - 0.5f;
+            var h = texture.DataSize.Height - 0.5f;
+            var quad = new[]
+            {
+                new SRhwTexturedVertex(new Vector4(-0.5f, -0.5f, 0f, 1f), new Vector2(0f, 0f)),
+                new SRhwTexturedVertex(new Vector4(w, -0.5f, 0f, 1f), new Vector2(1f, 0f)),
+                new SRhwTexturedVertex(new Vector4(-0.5f, h, 0f, 1f), new Vector2(0f, 1f)),
+                new SRhwTexturedVertex(new Vector4(w, h, 0f, 1f), new Vector2(1f, 1f))
+            };
+
+            using (var surface = texture.D3DTexture.GetSurfaceLevel(0))
+            {
+                _Device.SetRenderTarget(0, surface);
+                _Device.SetPixelShaderConstant(0, colorRows);
+                _Device.SetTexture(0, texture.Planes[0]);
+                _Device.SetTexture(1, texture.Planes[1]);
+                _Device.SetTexture(2, texture.Planes[2]);
+                fixed (SRhwTexturedVertex* vertices = quad)
+                {
+                    _Device.DrawPrimitiveUP(PrimitiveType.TriangleStrip, 2, (IntPtr)vertices, sizeof(SRhwTexturedVertex));
+                }
+            }
+        }
+
+        [StructLayout(LayoutKind.Sequential)]
+        private struct SRhwTexturedVertex
+        {
+            // ReSharper disable NotAccessedField.Local
+            private Vector4 _Position;
+            private Vector2 _Texture;
+            // ReSharper restore NotAccessedField.Local
+
+            public SRhwTexturedVertex(Vector4 position, Vector2 texture)
+            {
+                _Position = position;
+                _Texture = texture;
+            }
+        }
+        #endregion video
 
         private static Matrix4x4 _CalculateRotationMatrix(float rot, float rx1, float rx2, float ry1, float ry2)
         {
