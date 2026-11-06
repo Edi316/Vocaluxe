@@ -1,0 +1,139 @@
+name: 'Vocaluxe Custom Build'
+
+on:
+  push:
+    tags:
+      - '[0-9].[0-9].[0-9]'
+
+# only one release build per tag at a time
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  DOTNET_NOLOGO: true
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
+  DOTNET_SKIP_FIRST_TIME_EXPERIENCE: true
+  BUILD_CONFIGURATION: ReleaseWin
+  ARCH: x64
+
+jobs:
+  build:
+    runs-on: windows-2025 # Windows Server 2025 with Visual Studio 2026
+    timeout-minutes: 60
+    outputs:
+      filename: ${{ steps.package.outputs.filename }}
+    steps:
+      - name: Configure git
+        run: git config --global core.autocrlf true
+
+      - name: Checkout source
+        uses: actions/checkout@v7
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: WebApp/package-lock.json
+
+      - name: Setup MSBuild
+        uses: microsoft/setup-msbuild@v3
+
+      - name: Cache NuGet packages
+        uses: actions/cache@v6
+        with:
+          path: ~\.nuget\packages
+          key: nuget-${{ runner.os }}-${{ hashFiles('**/*.csproj', 'Directory.Build.props', 'NuGet.Config') }}
+          restore-keys: nuget-${{ runner.os }}-
+
+      - name: Download theme videos
+        shell: pwsh
+        run: |
+          Invoke-WebRequest 'https://github.com/Vocaluxe/VocaluxeDependencies/raw/master/zips/themes/vocaluxe.themes.vocaluxe-2024.video-part1.zip' -OutFile theme-videos.zip
+          7z x -aoa -oOutput/ theme-videos.zip
+          Remove-Item theme-videos.zip
+
+      - name: Build solution
+        env:
+          VOCALUXE_VERSION: ${{ github.ref_name }} # used by the custom winPreBuild.ps1
+        run: msbuild Vocaluxe.sln /restore /m /nologo /verbosity:minimal /bl:msbuild.binlog /p:Configuration=${{ env.BUILD_CONFIGURATION }} /p:Platform=${{ env.ARCH }}
+
+      - name: Run tests
+        shell: pwsh
+        run: |
+          dotnet test Tests/Tests.csproj --no-build -c $Env:BUILD_CONFIGURATION -p:Platform=$Env:ARCH `
+              --logger 'console;verbosity=normal'
+          exit $LASTEXITCODE
+
+      - name: Create release package name
+        id: package
+        shell: pwsh
+        run: |
+          $date = Get-Date -Format 'yyyyMMdd'
+          "filename=Vocaluxe_CustomBuild_$date.7z" >> $Env:GITHUB_OUTPUT
+
+      - name: Create 7Z package
+        shell: pwsh
+        env:
+          FILENAME: ${{ steps.package.outputs.filename }}
+        run: |
+          New-Item -ItemType Directory -Force dist | Out-Null
+          Push-Location Output
+          # leave out debug symbols of third-party libraries (libSkiaSharp.pdb alone is ~90 MB),
+          # keep the small Vocaluxe*.pdb for line numbers in stack traces
+          $exclude = Get-ChildItem -Recurse -File -Filter *.pdb |
+              Where-Object Name -notlike 'Vocaluxe*' |
+              ForEach-Object { (Resolve-Path -Relative $_.FullName) -replace '^\.[\\/]', '' }
+          $exclude | ForEach-Object { Write-Host "Excluded: $_" }
+          $exclude | Set-Content -Encoding utf8 ../package-exclude.txt
+          7z a "../dist/$Env:FILENAME" * '-x@../package-exclude.txt'
+          Pop-Location
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Upload release package artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: release-package
+          path: dist/*.7z
+          if-no-files-found: error
+          compression-level: 0 # already compressed
+
+      - name: Upload MSBuild log
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: msbuild-log
+          path: msbuild.binlog
+          if-no-files-found: ignore
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write # create the release
+    steps:
+      - name: Download release package artifact
+        uses: actions/download-artifact@v8
+        with:
+          name: release-package
+          path: artifacts
+
+      - name: Create release
+        uses: softprops/action-gh-release@v3
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: Vocaluxe Custom Build
+          prerelease: false
+          target_commitish: ${{ github.sha }}
+          files: artifacts/*.7z
+          fail_on_unmatched_files: true
