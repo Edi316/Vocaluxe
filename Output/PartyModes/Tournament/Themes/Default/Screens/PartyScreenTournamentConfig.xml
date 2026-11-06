@@ -97,14 +97,6 @@
         <Font>Outline</Font>
         <Text>TR_BUTTON_NEXT</Text>
       </Text>
-      <Reflection>
-        <Height>39</Height>
-        <Space>15</Space>
-      </Reflection>
-      <SelReflection>
-        <Height>39</Height>
-        <Space>15</Space>
-      </SelReflection>
     </Button>
     <Button Name="ButtonBack">
       <Skin>Button</Skin>
@@ -132,14 +124,6 @@
         <Font>Outline</Font>
         <Text>TR_BUTTON_BACK</Text>
       </Text>
-      <Reflection>
-        <Height>39</Height>
-        <Space>15</Space>
-      </Reflection>
-      <SelReflection>
-        <Height>39</Height>
-        <Space>15</Space>
-      </SelReflection>
     </Button>
   </Buttons>
   <SongMenus />
@@ -174,7 +158,7 @@
         <Z>0</Z>
       </RectArrowRight>
       <Color Name="SelectSlideColor" />
-      <SelColor Name="SelectSlideSelColor" />
+      <SelColor Name="ButtonSelColor" />
       <ArrowColor Name="ArrowColor" />
       <ArrowSelColor Name="ArrowSelColor" />
       <TextColor Name="TextColorAlpha" />
@@ -216,7 +200,7 @@
         <Z>0</Z>
       </RectArrowRight>
       <Color Name="SelectSlideColor" />
-      <SelColor Name="SelectSlideSelColor" />
+      <SelColor Name="ButtonSelColor" />
       <ArrowColor Name="ArrowColor" />
       <ArrowSelColor Name="ArrowSelColor" />
       <TextColor Name="TextColorAlpha" />
