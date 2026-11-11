@@ -1,0 +1,91 @@
+<?xml version='1.0' encoding='utf-8'?>
+<Screen xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+  <Informations>
+    <ScreenName>PopupScreenServerQR</ScreenName>
+    <ScreenVersion>2</ScreenVersion>
+  </Informations>
+  <Backgrounds />
+  <Statics>
+    <Static Name="StaticBG">
+      <Skin />
+      <Color>
+        <R>0</R>
+        <G>0</G>
+        <B>0</B>
+        <A>0.8</A>
+      </Color>
+      <Rect>
+        <X>0</X>
+        <Y>0</Y>
+        <W>1920</W>
+        <H>1080</H>
+        <Z>-1.99</Z>
+      </Rect>
+    </Static>
+    <Static Name="StaticQRServer">
+      <Skin>Menu</Skin>
+      <Color Name="Visible" />
+      <Rect>
+        <X>697.5</X>
+        <Y>315</Y>
+        <W>525</W>
+        <H>525</H>
+        <Z>-2</Z>
+      </Rect>
+    </Static>
+  </Statics>
+  <Texts>
+    <Text Name="Text1">
+      <X>960</X>
+      <Y>255</Y>
+      <Z>-2</Z>
+      <H>52.5</H>
+      <MaxW>450</MaxW>
+      <Color Name="TextColor" />
+      <SelColor Name="TextSelColor" />
+      <Align>Center</Align>
+      <ResizeAlign>Center</ResizeAlign>
+      <Style>Bold</Style>
+      <Font>Outline</Font>
+      <Text>TR_SCREENPSERVERQR_ADDRESS</Text>
+    </Text>
+    <Text Name="TextServerAddress">
+      <X>960</X>
+      <Y>855</Y>
+      <Z>-2</Z>
+      <H>52.5</H>
+      <MaxW>450</MaxW>
+      <Color Name="TextColor" />
+      <SelColor Name="TextSelColor" />
+      <Align>Center</Align>
+      <ResizeAlign>Center</ResizeAlign>
+      <Style>Bold</Style>
+      <Font>Outline</Font>
+      <Text />
+    </Text>
+    <Text Name="TextServerNotRunning">
+      <X>960</X>
+      <Y>397.5</Y>
+      <Z>-2</Z>
+      <H>67.5</H>
+      <MaxW>900</MaxW>
+      <Color Name="TextColor" />
+      <SelColor Name="TextSelColor" />
+      <Align>Center</Align>
+      <ResizeAlign>Center</ResizeAlign>
+      <Style>Bold</Style>
+      <Font>Outline</Font>
+      <Text>TR_SCREENPSERVERQR_NOTRUNNING</Text>
+    </Text>
+  </Texts>
+  <Buttons />
+  <SongMenus />
+  <Lyrics />
+  <SelectSlides />
+  <SingNotes />
+  <NameSelections />
+  <Equalizers />
+  <Playlists />
+  <ParticleEffects />
+  <ScreenSettings />
+</Screen>

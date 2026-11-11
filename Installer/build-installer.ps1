@@ -91,10 +91,10 @@ function Get-ThemeVideos {
         return
     }
     # part1 contains all videos of the Vocaluxe 2024 theme (there is no part2 anymore)
-    $url = 'https://github.com/Vocaluxe/VocaluxeDependencies/raw/master/zips/themes/vocaluxe.themes.vocaluxe-2024.video-part1.zip'
+    $url = 'https://raw.githubusercontent.com/Vocaluxe/VocaluxeDependencies/master/zips/themes/vocaluxe.themes.vocaluxe-2024.video-part1.zip'
     $zip = Join-Path ([System.IO.Path]::GetTempPath()) 'vocaluxe-theme-video.zip'
     Write-Output 'Downloading theme videos'
-    Invoke-WebRequest -Uri $url -OutFile $zip -UseBasicParsing
+    Invoke-WebRequest -Uri $url -OutFile $zip -UseBasicParsing -MaximumRetryCount 5 -RetryIntervalSec 15
     Expand-Archive -Path $zip -DestinationPath $output -Force
     Remove-Item $zip
 }
